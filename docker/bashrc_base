@@ -643,11 +643,13 @@ gitstfiles() {
 # ==============================================================================
 # colcon
 # ==============================================================================
-# To use clang one must have already installed
-#   clang
-#   libstdc++-12-dev # For ubuntu 22.04
-export CXX=clang++
-export CC=clang
+# These two exports used to set CXX and CC to clang here, so a shell started
+# interactively built with a different compiler than a scripted entry into
+# the same container, which built with GCC regardless. This container exists
+# to reproduce published numbers to the last bit, and a compiler that depends
+# on how the shell was started is exactly the kind of thing that quietly
+# breaks that. Removed: every build in this container, interactive or
+# scripted, now uses the base image's GCC.
 # ==============================================================================
 # List installed packages in chronological order (ascending)
 # ==============================================================================

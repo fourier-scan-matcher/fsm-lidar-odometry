@@ -27,10 +27,15 @@ RUN export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-inf
     && apt-get update \
     && apt-get install -y /tmp/ros2-apt-source.deb \
     && rm -f /tmp/ros2-apt-source.deb
+# python3-argcomplete and python3-colcon-cd are named explicitly because the
+# bashrc files copied in below expect the register-python-argcomplete command
+# and colcon_cd.sh, and neither ships as part of the base image's own colcon
+# installation.
 RUN apt-get -y update                                                       && \
     DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends \
     sudo apt-utils build-essential g++ git curl lsb-release pkg-config \
-    python3-rosdep ros-lyrical-rmw-cyclonedds-cpp gosu clang \
+    python3-rosdep python3-argcomplete python3-colcon-cd \
+    ros-lyrical-rmw-cyclonedds-cpp gosu clang \
     bash-completion vim nano bc                                             && \
     rm -rf /var/lib/apt/lists/*
 RUN rm /etc/ros/rosdep/sources.list.d/20-default.list                       && \
