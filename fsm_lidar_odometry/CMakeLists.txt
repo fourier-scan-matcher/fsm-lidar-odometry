@@ -117,6 +117,25 @@ if(BUILD_TESTING)
   ament_add_gtest(test_fsm_lidar_odometry_dft
     test/test_dft.cpp)
 
+  # Characterises the four finite checks in the transform stage that
+  # -Ofast's -ffinite-math-only folds to a no-op. Deliberately not part of the
+  # foreach loop below: that loop forces the exact floating point
+  # configuration precisely so this one target does not get it, since the
+  # whole point is to run this file under the configuration the package
+  # actually ships. It is also not linked against fsm_lidar_odometry_core, so
+  # its own compile flags, not the library's, are what govern the code that
+  # runs.
+  ament_add_gtest(test_fsm_lidar_odometry_finite_guard
+    test/test_finite_guard.cpp)
+  target_include_directories(test_fsm_lidar_odometry_finite_guard PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(test_fsm_lidar_odometry_finite_guard
+    Eigen3::Eigen
+    CGAL::CGAL
+    PkgConfig::FFTW3)
+  target_compile_definitions(test_fsm_lidar_odometry_finite_guard PRIVATE
+    FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE)
+
   ament_add_gtest(test_fsm_lidar_odometry_geometry
     test/test_geometry.cpp)
 
@@ -125,6 +144,28 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_fsm_lidar_odometry_params
     test/test_params.cpp)
+
+  # Characterises the out of bounds read in Match::fmtdbh's candidate angle
+  # sift. Deliberately not linked against fsm_lidar_odometry_core, and given
+  # its own -D_GLIBCXX_ASSERTIONS on top of the exact floating point settings
+  # every other suite already forces, so libstdc++'s own bounds check on
+  # std::vector::operator[] is what catches the defect in this file's own
+  # compiled code, rather than in whatever fsm_lidar_odometry_core happened to
+  # be built with.
+  ament_add_gtest(test_fsm_lidar_odometry_rotation_criterion_carryover
+    test/test_rotation_criterion_carryover.cpp)
+  target_include_directories(test_fsm_lidar_odometry_rotation_criterion_carryover PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(test_fsm_lidar_odometry_rotation_criterion_carryover
+    Eigen3::Eigen
+    CGAL::CGAL
+    PkgConfig::FFTW3)
+  target_compile_options(test_fsm_lidar_odometry_rotation_criterion_carryover PRIVATE
+    -O2 -fno-fast-math -ffp-contract=off)
+  target_compile_definitions(test_fsm_lidar_odometry_rotation_criterion_carryover PRIVATE
+    _GLIBCXX_ASSERTIONS
+    FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE
+    FSM_LIDAR_ODOMETRY_TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
 
   ament_add_gtest(test_fsm_lidar_odometry_scan_handling
     test/test_scan_handling.cpp)

@@ -21,10 +21,12 @@
 #define FSM_H
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -2402,6 +2404,27 @@ class DFTUtils
   public:
 
   /*****************************************************************************
+   * This package builds under -Ofast, which implies -ffinite-math-only. Under
+   * that setting the compiler is entitled to assume that no infinity or
+   * not-a-number value ever occurs, so it is free to fold a call to
+   * std::isfinite down to a constant true. The checks further down this class
+   * exist to catch a non finite Fourier coefficient, so they cannot rely on a
+   * call the optimiser is allowed to erase; the exponent bits are read
+   * directly instead, following the reasoning already applied to
+   * isValidRange in fsm_lidar_odometry.cpp for exactly this reason.
+   * @brief Returns whether value holds neither infinity nor not-a-number.
+   * @param[in] value [const double] The value to test.
+   * @return [bool] True when value is finite.
+   */
+  static bool isFinite(const double value)
+  {
+    const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+    const std::uint64_t exponent = (bits >> 52) & 0x7FFU;
+
+    return exponent != 0x7FFU;
+  }
+
+  /*****************************************************************************
    * Plans are expensive to create and, under FFTW_MEASURE, creating one runs
    * timing trials. The transforms below were creating and destroying one on
    * every call, at every oversampling size, which dominated their cost.
@@ -2741,14 +2764,20 @@ class DFTUtils
     /* The imaginary part of the first coefficient */
     const double x1_i = dft_coeffs[rays_diff.size()-1];
 
+    /*
+     * std::isfinite folds to a constant true under this package's -Ofast
+     * build, so a non finite coefficient would pass straight through
+     * unnoticed. isFinite above reads the bits instead and cannot be folded
+     * away the same manner.
+     */
     /* Is x1_r finite? */
-    if (std::isfinite(x1_r))
+    if (isFinite(x1_r))
       dft_coeff_vector.push_back(x1_r);
     else
       dft_coeff_vector.push_back(0.0);
 
     /* Is x1_i finite? */
-    if (std::isfinite(x1_i))
+    if (isFinite(x1_i))
       dft_coeff_vector.push_back(x1_i);
     else
       dft_coeff_vector.push_back(0.0);
@@ -2795,14 +2824,20 @@ class DFTUtils
     /* The imaginary part of the first coefficient */
     const double x1_i = dft_coeffs[rays_diff.size()-1];
 
+    /*
+     * std::isfinite folds to a constant true under this package's -Ofast
+     * build, so a non finite coefficient would pass straight through
+     * unnoticed. isFinite above reads the bits instead and cannot be folded
+     * away the same manner.
+     */
     /* Is x1_r finite? */
-    if (std::isfinite(x1_r))
+    if (isFinite(x1_r))
       dft_coeff_vector.push_back(x1_r);
     else
       dft_coeff_vector.push_back(0.0);
 
     /* Is x1_i finite? */
-    if (std::isfinite(x1_i))
+    if (isFinite(x1_i))
       dft_coeff_vector.push_back(x1_i);
     else
       dft_coeff_vector.push_back(0.0);
@@ -4117,6 +4152,20 @@ class Match
     double best_cand_angle = 0.0;
     double best_min_tc = 100000.0;
 
+    /*
+     * best_cand_angle's own pair of rotation criteria, carried alongside it.
+     * rc0 and rc1, below, hold one entry per angle the rotation stage
+     * returned this iteration, and a carried-over best_cand_angle is not one
+     * of them, so neither vector has an entry that belongs to it. What does
+     * belong to it is the pair recorded here whenever it is set below, the
+     * one moment it is a genuine member of the rotation stage's own output.
+     * Before that has happened the pair cannot mean anything and holds -2.0,
+     * the sentinel this function already uses elsewhere for "not a real
+     * reading".
+     */
+    double best_cand_rc0 = -2.0;
+    double best_cand_rc1 = -2.0;
+
     /* A lock for going overdrive when the rotation criterion is near-excellent */
     [[maybe_unused]] const bool up_lock = false;
     int total_iterations = 0;
@@ -4230,11 +4279,47 @@ class Match
         {
           best_min_tc = tcs_sift[min_tc_idx];
           best_cand_angle = cand_angles[min_tc_idx];
+
+          /*
+           * A genuine rotation candidate carries its own rc0/rc1. When the
+           * winner is instead the carried-over angle appended below,
+           * cand_angles[min_tc_idx] is best_cand_angle already and the pair
+           * recorded for it last time still applies, so nothing is
+           * overwritten here in that case.
+           */
+          if (min_tc_idx < rc0.size())
+          {
+            best_cand_rc0 = rc0[min_tc_idx];
+            best_cand_rc1 = rc1[min_tc_idx];
+          }
         }
       }
 
-      rc0_v.push_back(rc0[min_tc_idx]);
-      rc1_v.push_back(rc1[min_tc_idx]);
+      /*
+       * min_tc_idx indexes cand_angles, which carries the rotation stage's
+       * own candidates plus best_cand_angle, appended above when it was not
+       * already among them. rc0 and rc1 carry only the former, one entry per
+       * angle the rotation stage returned, with no entry for the appended
+       * one. Reading rc0[min_tc_idx] and rc1[min_tc_idx] unconditionally
+       * therefore read one past the end of both vectors whenever the
+       * appended, carried-over angle wins the sift, which happens whenever
+       * the previous best beats every angle found this iteration: undefined
+       * behaviour that a release build does not catch, and that then flows
+       * into the reported rotation criterion. Reading from rc0/rc1 only when
+       * min_tc_idx is a genuine index into them, and from the pair carried
+       * alongside best_cand_angle otherwise, records a real measurement
+       * either way.
+       */
+      if (min_tc_idx < rc0.size())
+      {
+        rc0_v.push_back(rc0[min_tc_idx]);
+        rc1_v.push_back(rc1[min_tc_idx]);
+      }
+      else
+      {
+        rc0_v.push_back(best_cand_rc0);
+        rc1_v.push_back(best_cand_rc1);
+      }
 
       /*
        * Update the current orientation estimate with the angle that sports the
