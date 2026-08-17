@@ -118,11 +118,15 @@ source ~/ros2_ws/install/setup.bash
 ros2 launch fsm_lidar_odometry fsm_lidar_odometry.launch.xml
 ```
 
-With Docker:
+With Docker. The container holds a built workspace, but its main process is a shell rather than the node, so it is started and then launched into:
 
 ```bash
-docker compose -f docker/docker-compose.yml up
+docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml exec --user fsm_lidar_odometry \
+  fsm_lidar_odometry bash -lc 'ros2 launch fsm_lidar_odometry fsm_lidar_odometry.launch.xml'
 ```
+
+Both arguments matter. `--user fsm_lidar_odometry` is needed because the container's main process drops to that user but an `exec` does not, and only that user's shell has the workspace on its path. `bash -lc` is needed because the environment comes from that shell's profile rather than from the image.
 
 ### Call
 
