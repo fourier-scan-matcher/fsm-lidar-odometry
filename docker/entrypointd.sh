@@ -84,9 +84,12 @@ chown --dereference $USER "/proc/$$/fd/1" "/proc/$$/fd/2" || :
 # bulk of this discrepancy.
 chmod -R o+rwX /home/$USER/ros2_ws/src
 
-chown -R $USER:$USER /home/$USER/shared-input
+# Rights, not ownership. Both directories are already owned by $USER inside the
+# image, so the chown that once stood here was redundant there; where they are
+# bind mounted it took ownership of the host's own directories away from whoever
+# checked them out, and it does not need to. o+rwX is enough for the container's
+# user to read and write in them whatever uid the host gave them.
 chmod -R o+rwX /home/$USER/shared-input
-chown -R $USER:$USER /home/$USER/shared-output
 chmod -R o+rwX /home/$USER/shared-output
 
 # Drop from root to fsm_lidar_odometry

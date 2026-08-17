@@ -1,5 +1,17 @@
 source /opt/ros/lyrical/setup.bash
-source /home/$USER/ros2_ws/install/local_setup.bash
+
+# $HOME rather than /home/$USER: the entrypoint drops from root through gosu,
+# which sets HOME and does not set USER, so the old path collapsed to /home/ and
+# every shell opened without the workspace on it.
+#
+# Said out loud when it is missing rather than skipped silently: without it
+# nothing in the workspace is on the path, and "package not found" is a worse
+# thing to be told than which file was not there.
+if [ -f "${HOME}/ros2_ws/install/local_setup.bash" ]; then
+  source "${HOME}/ros2_ws/install/local_setup.bash"
+else
+  echo "no workspace at ${HOME}/ros2_ws/install: nothing in it is on the path" >&2
+fi
 #export ROS_LOCALHOST_ONLY=0
 #export ROS_DOMAIN_ID=128
 
