@@ -242,12 +242,22 @@ if(BUILD_TESTING)
 endif()
 
 # ------------------------------------------------------------------------------
+# The two libraries go into an export set rather than being installed loose, so
+# that a consumer's find_package(fsm_lidar_odometry) yields imported targets
+# carrying this package's include directories and its link dependencies.
+# Announcing include directories and library names alone, as this file did,
+# leaves a consumer to rediscover Eigen, CGAL and FFTW3 for itself and to guess
+# the link order, which is the same as announcing nothing usable.
 install(TARGETS
   fsm_lidar_odometry_core
   fsm_lidar_odometry_interface
-  fsm_lidar_odometry_interface_node
+  EXPORT export_fsm_lidar_odometry
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
+  INCLUDES DESTINATION include)
+
+install(TARGETS
+  fsm_lidar_odometry_interface_node
   RUNTIME DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY include/
@@ -256,7 +266,22 @@ install(DIRECTORY include/
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME})
 
-ament_export_include_directories(include)
-ament_export_libraries(fsm_lidar_odometry_core fsm_lidar_odometry_interface)
+ament_export_targets(export_fsm_lidar_odometry HAS_LIBRARY_TARGET)
 
-ament_package()
+# What the two libraries expose in their own headers, and therefore what a
+# consumer has to have found before it can compile against them. FFTW3 is the
+# exception: it has no CMake package to find, so the extras file below builds
+# its imported target the same way this file does.
+ament_export_dependencies(
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  nav_msgs
+  std_srvs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+  Eigen3
+  CGAL)
+
+ament_package(CONFIG_EXTRAS cmake/fsm_lidar_odometry-extras.cmake)

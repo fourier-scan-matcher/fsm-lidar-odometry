@@ -93,6 +93,20 @@ colcon build --packages-select fsm_lidar_odometry
 
 FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets.
 
+### As a dependency of your own package
+
+The matcher is usable without the node. Name this package in your manifest and link the target you want: `fsm_lidar_odometry::fsm_lidar_odometry_core` for the matcher on its own, which pulls in no ROS, or `fsm_lidar_odometry::fsm_lidar_odometry_interface` for the node's own class.
+
+```cmake
+find_package(fsm_lidar_odometry REQUIRED)
+
+target_link_libraries(your_target fsm_lidar_odometry::fsm_lidar_odometry_core)
+```
+
+Each target carries this package's headers and its own dependencies, so Eigen, CGAL and FFTW3 do not have to be found again on your side.
+
+One thing to know before trusting the numbers. Nearly all of the matcher is in the header, so what governs the arithmetic of what you call is the flags **you** compile with, not the ones this package was built with. The figures quoted here were measured at the settings its own `CMakeLists.txt` sets, and the tolerance you can hold it to at other settings has not been characterised.
+
 ## Run
 
 ### Launch
