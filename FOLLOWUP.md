@@ -126,3 +126,21 @@ build where recovery never fired, so the seed would have had nothing to
 influence. Adding it now would invalidate a working reference for no gain. It
 matters only if the recovery path is ever compared across versions, which the
 entry above already says needs other work first.
+
+## The container has not been rebuilt since three faults were corrected in it
+
+The shell profile looked for the workspace under a path that resolved to
+`/home/`, so no shell in the shipped container had the workspace on it. The
+entrypoint took ownership of the two shared directories, which matters wherever
+a compose file bind mounts host directories over them. The build deleted the
+rosdep sources list and fetched an identical copy over a link with no retry.
+
+All three are corrected. The shell one was proved by mounting the file into a
+built image of the package descended from this one, whose entrypoint drops from
+root the same way. The other two need a build to exercise, and no build has run:
+`raw.githubusercontent.com` is rate limiting this machine, which is what exposed
+the rosdep step in the first place.
+
+Two network fetches remain in the build, `rosdep update` and the lookup that
+finds the current ROS apt source release. Both genuinely need the network and
+neither retries.

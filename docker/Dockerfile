@@ -38,8 +38,13 @@ RUN apt-get -y update                                                       && \
     ros-lyrical-rmw-cyclonedds-cpp gosu clang \
     bash-completion vim nano bc                                             && \
     rm -rf /var/lib/apt/lists/*
-RUN rm /etc/ros/rosdep/sources.list.d/20-default.list                       && \
-    rosdep init
+# rosdep init is deliberately not run. The base image already ships
+# /etc/ros/rosdep/sources.list.d/20-default.list, and its content is byte for
+# byte what rosdep init writes, so deleting it and fetching an identical copy
+# bought nothing and cost a network round trip that has no retry behind it. One
+# rate-limited answer from the host it reads failed the whole build, with a
+# Python traceback rather than a sentence. rosdep update below still needs the
+# network, and that one is unavoidable.
 ################################################################################
 # User configuration
 ################################################################################
