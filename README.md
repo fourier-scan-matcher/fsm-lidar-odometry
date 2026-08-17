@@ -91,7 +91,7 @@ rosdep install --from-paths src --ignore-src -r -y --skip-keys libfftw3
 colcon build --packages-select fsm_lidar_odometry
 ```
 
-FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets. Once that rule carries an override, the two lines collapse back into one.
+FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets.
 
 ## Run
 
@@ -185,28 +185,27 @@ Frame ids carry no leading slash. tf2 rejects them.
 | `rng_seed`               | 0 draws the recovery search from hardware entropy, as always. Any other value pins it so a run can be reproduced  | 0             |
 | `ray_search`             | `angular` or `windowed`. How each ray is matched to the wall it meets; see below                                   | `angular`     |
 
-`size_scan` decides how many rays a scan is matched at.
+- `size_scan` decides how many rays a scan is matched at.
 
-`0`, the default, matches every ray the scan carries: the sensor's own resolution, with nothing discarded. The first scan to arrive settles the size for the session, since two scans can only be matched against each other at one size, and a later scan of a different length is resampled to it rather than dropped.
+- `0`, the default, matches every ray the scan carries: the sensor's own resolution, with nothing discarded. The first scan to arrive settles the size for the session, since two scans can only be matched against each other at one size, and a later scan of a different length is resampled to it rather than dropped.
 
-Any other value reduces every scan to that many rays before matching, and refuses a scan that carries fewer. This is the setting to reach for when matching cannot keep up with the sensor. Execution time rises faster than the ray count does, so halving the rays buys back more than half the time.
+  Any other value reduces every scan to that many rays before matching, and refuses a scan that carries fewer. This is the setting to reach for when matching cannot keep up with the sensor. Execution time rises faster than the ray count does, so halving the rays buys back more than half the time.
 
-On a 1.70 GHz laptop core, a match takes 21 ms at 360 rays, 48 ms at 720, and 76 ms at 1081. Anything bought in the last few years is two to four times faster than that. If a match ever takes longer than the gap between scans the node says so, periodically, and names this setting.
+  On a 1.70 GHz laptop core, a match takes 21 ms at 360 rays, 48 ms at 720, and 76 ms at 1081. Anything bought in the last few years is two to four times faster than that. If a match ever takes longer than the gap between scans the node says so, periodically, and names this setting.
 
-`ray_search` picks between two ways of finding the wall each ray of a scan
-meets.
+- `ray_search` picks between two ways of finding the wall each ray of a scan meets.
 
-`angular` offers each wall only to the rays that can reach it. It returns the
+  - `angular` offers each wall only to the rays that can reach it. It returns the
 nearest wall in front of every ray whatever shape the room is, and its
 execution time rises in step with `size_scan`.
 
-`windowed` narrows the search for each ray to the neighbourhood of the wall the
+  - `windowed` narrows the search for each ray to the neighbourhood of the wall the
 previous ray met. It is what this algorithm shipped with, and it is kept so
 that a run can be compared against results published before `angular` existed.
 Its execution time rises with the square of `size_scan`, and where a room turns
 back on itself it can return a wall standing behind the nearest one.
 
-Measured over 13908 matches drawn from a recorded dataset at `size_scan: 360`,
+  Measured over 13908 matches drawn from a recorded dataset at `size_scan: 360`,
 `angular` completes a match in 17.9 ms against `windowed`'s 25.4 ms, median.
 The two disagree on 0.67% of matches, by a median of 3.5 mm. At `size_scan:
 1440` the ray casting alone is 3.2 times faster, and at 5760, 12.4 times.
