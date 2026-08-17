@@ -238,7 +238,9 @@ colcon build --cmake-args "-DCMAKE_CXX_FLAGS=-DFSM_LIDAR_ODOMETRY_TRACE"
 
 That build is for finding out where the time goes and is not the one to run a robot with: it reads the clock around every stage of every iteration.
 
-## Upgrading from the ROS 1 version
+
+<details>
+<summary><h2 id="upgrading-from-the-ros-1-version" style="display:inline">Upgrading from the ROS 1 version</h2></summary>
 
 The matcher itself is unchanged, and this is measured rather than asserted: driven over identical synthetic scans, the two versions agree on every published quantity to better than 4e-15, six orders of magnitude inside the 1e-9 bar the comparison demands. Both sides are checked against themselves first, three runs each, so that the comparison rests on something reproducible.
 
@@ -264,6 +266,8 @@ Eight defects were corrected before the port, and the numbers above are measured
 - Frame id fallbacks carried a leading slash, which tf2 rejects.
 - Two assertions checked that an unsigned value was at least zero.
 - Output was stamped from the wall clock rather than from the scan.
+
+</details>
 
 ## Motivation and Under the hood
 
