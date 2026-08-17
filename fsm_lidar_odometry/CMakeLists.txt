@@ -243,11 +243,22 @@ if(BUILD_TESTING)
   # so the directory holding the shared helpers has to be on the import path
   # for it. Setting it here keeps the test files free of path manipulation.
   #
+  # Each file starts a node of its own, and all three use the same node name and
+  # the same topic names. Left in one DDS domain they hear each other: a case
+  # asserting that its node has published nothing yet sees what another file's
+  # started node published, and a node running outside the tests answers
+  # alongside them. Three files are few enough that they have so far passed
+  # together by luck; the package this one is descended from has eight and lost
+  # twenty four cases to exactly this. A domain per file is what keeps each test
+  # hearing only itself. The numbers are arbitrary and only have to differ.
+  #
   # The startup contract needs a node nothing has touched, so it launches its
   # own rather than sharing the one the behaviour tests drive.
   add_launch_test(test/test_node_startup.py TIMEOUT 300
+    ENV ROS_DOMAIN_ID=81
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
   add_launch_test(test/test_node_behaviour.py TIMEOUT 400
+    ENV ROS_DOMAIN_ID=82
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
 
   # The initial pose cases launch their own node for a different reason: the
@@ -255,6 +266,7 @@ if(BUILD_TESTING)
   # pose topic, which is not a state to hand on to a case expecting an
   # answer.
   add_launch_test(test/test_initial_pose.py TIMEOUT 300
+    ENV ROS_DOMAIN_ID=83
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
 
   foreach(test_target test_fsm_lidar_odometry_core test_fsm_lidar_odometry_core_golden
