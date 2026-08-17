@@ -66,22 +66,10 @@ USER=fsm_lidar_odometry
 # fix stdout/stderr permissions to allow non-root user
 chown --dereference $USER "/proc/$$/fd/1" "/proc/$$/fd/2" || :
 
-# xterm does not open for some reason. See docker-compose.yml's line
-# `- ${XAUTHORITY:-$HOME/.Xauthority}:/home/fsm_lidar_odometry/.Xauthority`
-# Otherwise use
-# https://stackoverflow.com/a/44434831/5297684
-# which essentially boils down to
-# (host)      xauth list
-# (host)      *copy result*
-# (container) touch /home/fsm_lidar_odometry/.Xauthority
-# (container) xauth add <the line you copied>
-#chmod 777 /home/fsm_lidar_odometry/.Xauthority
-
-# In case the host user's uid is not equal to the container's user's uid (1000)
-# the bind mount `/home/$USER/ros2_ws/src` (see docker-compose.yml:volumes)
-# is owned by the host's user. If we transfer ownership to the container's user
-# then we simply shuffle the problem. Give others rwX rights to mitigate the
-# bulk of this discrepancy.
+# A host uid that is not the container user's own owns whatever it bind mounts
+# here, and this package's own compose file mounts nothing at all. Another
+# compose file may. Transferring ownership to the container's user would only
+# shuffle the problem, so others are granted rwX instead.
 chmod -R o+rwX /home/$USER/ros2_ws/src
 
 # Rights, not ownership. Both directories are already owned by $USER inside the
