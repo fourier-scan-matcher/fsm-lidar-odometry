@@ -117,6 +117,37 @@ if(BUILD_TESTING)
   # compiler is free to reassociate, which moves results well past that, so a
   # passing test would say nothing. Force the exact configuration here whatever
   # the library itself was configured with.
+  #
+  # That forcing is why the suites below compile the core into themselves
+  # through this object library rather than linking fsm_lidar_odometry_core.
+  # Nearly everything the core is lives in a header, as functions the compiler
+  # is free to emit into every translation unit that uses them, and two copies
+  # compiled under different arithmetic settings are two different functions
+  # wearing one name. A test that both compiled the header under exact
+  # settings and linked a library built under the shipped ones therefore held
+  # two definitions of each, and which one every call reached was decided by
+  # the order the linker happened to see them: a test could assert a tolerance
+  # it was not in fact measuring, and the library's own internal calls could
+  # be answered by the test's copies. Compiled in here instead, every
+  # definition in a test binary comes from one configuration, which is the
+  # configuration the test asked for.
+  add_library(fsm_lidar_odometry_core_exact OBJECT
+    src/fsm_lidar_odometry/fsm_lidar_odometry.cpp)
+
+  target_include_directories(fsm_lidar_odometry_core_exact PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+  target_link_libraries(fsm_lidar_odometry_core_exact PUBLIC
+    Eigen3::Eigen
+    CGAL::CGAL
+    PkgConfig::FFTW3)
+
+  target_compile_options(fsm_lidar_odometry_core_exact PUBLIC
+    -O2 -fno-fast-math -ffp-contract=off)
+
+  target_compile_definitions(fsm_lidar_odometry_core_exact PUBLIC
+    FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE)
+
   ament_add_gtest(test_fsm_lidar_odometry_core
     test/test_defects_core.cpp)
 
@@ -231,11 +262,8 @@ if(BUILD_TESTING)
                       test_fsm_lidar_odometry_invalid_ranges test_fsm_lidar_odometry_params
                       test_fsm_lidar_odometry_scan_handling test_fsm_lidar_odometry_stages)
     if(TARGET ${test_target})
-      target_link_libraries(${test_target} fsm_lidar_odometry_core)
-      target_compile_options(${test_target} PRIVATE
-        -O2 -fno-fast-math -ffp-contract=off)
+      target_link_libraries(${test_target} fsm_lidar_odometry_core_exact)
       target_compile_definitions(${test_target} PRIVATE
-        FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE
         FSM_LIDAR_ODOMETRY_TEST_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures")
     endif()
   endforeach()
