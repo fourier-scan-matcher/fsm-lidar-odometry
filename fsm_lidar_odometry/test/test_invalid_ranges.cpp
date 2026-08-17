@@ -31,7 +31,9 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -43,6 +45,28 @@ namespace
 const std::size_t kSize = 360;
 const double kInfinity = std::numeric_limits<double>::infinity();
 const double kNotANumber = std::numeric_limits<double>::quiet_NaN();
+
+/*
+ * Whether `value` is neither infinite nor not-a-number, read off its
+ * exponent bits rather than asked of `std::isfinite`. This target currently
+ * sits in the CMake group that forces `-fno-fast-math`, and under that
+ * setting `std::isfinite` genuinely answers the question. But `-Ofast` is
+ * what this package ships, and `-Ofast` implies `-ffinite-math-only`, under
+ * which the compiler is entitled to assume no infinity or not-a-number ever
+ * exists and folds `std::isfinite` to a constant `true`. Moving this target
+ * out of the exact arithmetic group, for any reason, would turn the three
+ * assertions below into assertions that always pass, with nothing failing to
+ * say so. `isValidRange` in `fsm_lidar_odometry.cpp` and `isFinite` in
+ * `fsm_core.hpp`'s `DFTUtils` already met this trap and read the bits
+ * instead; this is the same remedy, kept independent of both since a test
+ * has no business depending on the production code it is not exercising
+ * here.
+ */
+bool isFinite(const double value)
+{
+  const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+  return ((bits >> 52) & 0x7FFU) != 0x7FFU;
+}
 
 std::vector<double> roomScan(const double x, const double y)
 {
@@ -123,9 +147,9 @@ TEST(InvalidRanges, AnInfiniteRayDoesNotWreckTheMatch)
   const fsm_lidar_odometry::Pose expected = matchWith(clean);
   const fsm_lidar_odometry::Pose actual = matchWith(with_infinity);
 
-  EXPECT_TRUE(std::isfinite(actual.x));
-  EXPECT_TRUE(std::isfinite(actual.y));
-  EXPECT_TRUE(std::isfinite(actual.t));
+  EXPECT_TRUE(isFinite(actual.x));
+  EXPECT_TRUE(isFinite(actual.y));
+  EXPECT_TRUE(isFinite(actual.t));
 
   EXPECT_NEAR(actual.x, expected.x, 1e-3);
   EXPECT_NEAR(actual.y, expected.y, 1e-3);

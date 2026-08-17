@@ -46,7 +46,9 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -56,6 +58,27 @@
 
 namespace
 {
+
+/*
+ * Whether `value` is neither infinite nor not-a-number, read off its
+ * exponent bits rather than asked of `std::isfinite`. This target is built
+ * with `-fno-fast-math`, and under that setting `std::isfinite` genuinely
+ * answers the question, but `-Ofast` is what this package ships, and
+ * `-Ofast` implies `-ffinite-math-only`, under which the compiler is
+ * entitled to assume no infinity or not-a-number ever exists and folds
+ * `std::isfinite` to a constant true. Should this target's flags ever drift
+ * towards what the package ships, the three assertions below would still
+ * mean what they say rather than silently passing regardless of the pose
+ * they are given. `isFinite` in `fsm_core.hpp`'s `DFTUtils` already met this
+ * trap and reads the bits instead; this is the same remedy, kept
+ * independent of it since a test has no business depending on the
+ * production code it is not exercising here.
+ */
+bool isFinite(const double value)
+{
+  const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+  return ((bits >> 52) & 0x7FFU) != 0x7FFU;
+}
 
 std::string fixture(const std::string& name)
 {
@@ -124,9 +147,9 @@ void driveScenario(const std::string& scenario)
     const FSM::MatchOutput match =
       FSM::Match::fmtdbh(scans[s], FSM::Pose{}, map, forward, inverse, ip);
 
-    EXPECT_TRUE(std::isfinite(match.pose.x)) << scenario << " step " << s;
-    EXPECT_TRUE(std::isfinite(match.pose.y)) << scenario << " step " << s;
-    EXPECT_TRUE(std::isfinite(match.pose.t)) << scenario << " step " << s;
+    EXPECT_TRUE(isFinite(match.pose.x)) << scenario << " step " << s;
+    EXPECT_TRUE(isFinite(match.pose.y)) << scenario << " step " << s;
+    EXPECT_TRUE(isFinite(match.pose.t)) << scenario << " step " << s;
   }
 }
 

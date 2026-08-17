@@ -29,7 +29,16 @@ option(FSM_LIDAR_ODOMETRY_DETERMINISTIC_FFT "Select FFTW plans by heuristic, not
 if(FSM_LIDAR_ODOMETRY_EXACT_FP)
   add_compile_options(-O2 -fno-fast-math -ffp-contract=off)
 else()
-  add_compile_options(-Ofast)
+  # -Ofast turns on -ffast-math, which turns on -ffinite-math-only. That sub
+  # flag lets the compiler assume no infinity or not-a-number value ever
+  # occurs, which folds a check written to catch one into a no-op and can
+  # make an equality comparison against a literal report true for a value
+  # that is not a number. Disabling it costs a parity check on the rare
+  # double equality comparison this package's hot loops make, and keeps
+  # every other relaxation -Ofast brings: the higher optimisation level,
+  # reassociation, reciprocal approximations, signed zero and trapping
+  # assumptions, and flush to zero.
+  add_compile_options(-Ofast -fno-finite-math-only)
 endif()
 
 # ------------------------------------------------------------------------------
@@ -125,6 +134,28 @@ if(BUILD_TESTING)
   # actually ships. It is also not linked against fsm_lidar_odometry_core, so
   # its own compile flags, not the library's, are what govern the code that
   # runs.
+  #
+  # The shipping configuration is pinned on the target rather than inherited
+  # from directory scope, because FSM_LIDAR_ODOMETRY_EXACT_FP=ON rewrites
+  # directory scope to the exact settings and would otherwise turn the one file
+  # written to defeat the optimiser into another copy of the same safe build.
+  # Three things make the pin fussier than it looks, and getting any of them
+  # wrong yields a target that reads as pinned and is not:
+  #
+  #   * FSM_LIDAR_ODOMETRY_EXACT_FP=ON rewrites directory scope to
+  #     -fno-fast-math and -ffp-contract=off, and directory options precede
+  #     target options on the command line, so both have to be restated to be
+  #     undone.
+  #   * gcc applies the flags implied by an -O level before it applies any
+  #     explicit flag, so a later -Ofast on its own does not undo an earlier
+  #     explicit -fno-fast-math. -ffast-math has to be named outright.
+  #   * cmake de-duplicates compile options, so a flag restated here that also
+  #     appears at directory scope is dropped from this list rather than moved
+  #     to the end of it. That silently reorders the rest, and -ffast-math
+  #     landing after -fno-finite-math-only turns finite math back on. The
+  #     SHELL: prefix is what keeps the four flags together and in order.
+  #
+  # The file fails to compile if this is ever weakened.
   ament_add_gtest(test_fsm_lidar_odometry_finite_guard
     test/test_finite_guard.cpp)
   target_include_directories(test_fsm_lidar_odometry_finite_guard PRIVATE
@@ -133,6 +164,8 @@ if(BUILD_TESTING)
     Eigen3::Eigen
     CGAL::CGAL
     PkgConfig::FFTW3)
+  target_compile_options(test_fsm_lidar_odometry_finite_guard PRIVATE
+    "SHELL:-Ofast -ffast-math -fno-finite-math-only -ffp-contract=fast")
   target_compile_definitions(test_fsm_lidar_odometry_finite_guard PRIVATE
     FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE)
 
@@ -184,6 +217,13 @@ if(BUILD_TESTING)
   add_launch_test(test/test_node_startup.py TIMEOUT 300
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
   add_launch_test(test/test_node_behaviour.py TIMEOUT 400
+    APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+  # The initial pose cases launch their own node for a different reason: the
+  # service they drive holds the node until a message arrives on the initial
+  # pose topic, which is not a state to hand on to a case expecting an
+  # answer.
+  add_launch_test(test/test_initial_pose.py TIMEOUT 300
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
 
   foreach(test_target test_fsm_lidar_odometry_core test_fsm_lidar_odometry_core_golden

@@ -34,12 +34,25 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
+#include <cstdint>
 #include <string>
 
 #include "fsm_lidar_odometry/fsm_lidar_odometry.hpp"
 
 namespace
 {
+
+/*
+ * The two values that are not numbers are written as bit patterns rather than
+ * taken from std::numeric_limits. A pattern is what it says it is whatever the
+ * compiler has been told about floating point, whereas a library constant read
+ * under fast arithmetic can be folded into something else before it is ever
+ * handed over. What these tests exercise is a library built with settings this
+ * file does not share, so the value has to be pinned on this side of the call.
+ */
+constexpr std::uint64_t kPositiveInfinityBits = 0x7FF0000000000000ULL;
+constexpr std::uint64_t kQuietNotANumberBits = 0x7FF8000000000000ULL;
 
 /* Case-insensitive, since the message is prose and the setting is not. */
 bool mentions(const std::string& message, const std::string& setting)
@@ -114,6 +127,84 @@ TEST(ParameterValidation, ANegativeOrientationBoundIsRefused)
   EXPECT_FALSE(problem.empty());
   EXPECT_TRUE(mentions(problem, "t_bound")) << problem;
   EXPECT_TRUE(mentions(problem, "-0.5")) << problem;
+}
+
+/*
+ * A bound that is not a number is worse than a negative one. It survives every
+ * ordering comparison the recovery search makes, so the search draws pose
+ * after pose and none of them is ever inside the bound. The published version
+ * caught this with an assertion, and assertions are compiled out of the build
+ * that ships, so the node simply stops answering. A parameter file or a
+ * command line can carry the value, which makes this reachable without writing
+ * any code at all.
+ *
+ * Each case asserts the bits of the value it is about to hand over, so a run
+ * that silently turned it into something ordinary fails here rather than
+ * further down where it would look like the refusal working.
+ */
+TEST(ParameterValidation, APositionBoundThatIsNotANumberIsRefused)
+{
+  fsm_lidar_odometry::Parameters parameters;
+  parameters.xy_bound = std::bit_cast<double>(kQuietNotANumberBits);
+
+  ASSERT_EQ(std::bit_cast<std::uint64_t>(parameters.xy_bound),
+    kQuietNotANumberBits);
+
+  const std::string problem = fsm_lidar_odometry::validate(parameters);
+
+  EXPECT_FALSE(problem.empty());
+  EXPECT_TRUE(mentions(problem, "xy_bound")) << problem;
+  EXPECT_TRUE(mentions(problem, "nan")) << problem;
+}
+
+TEST(ParameterValidation, AnOrientationBoundThatIsNotANumberIsRefused)
+{
+  fsm_lidar_odometry::Parameters parameters;
+  parameters.t_bound = std::bit_cast<double>(kQuietNotANumberBits);
+
+  ASSERT_EQ(std::bit_cast<std::uint64_t>(parameters.t_bound),
+    kQuietNotANumberBits);
+
+  const std::string problem = fsm_lidar_odometry::validate(parameters);
+
+  EXPECT_FALSE(problem.empty());
+  EXPECT_TRUE(mentions(problem, "t_bound")) << problem;
+  EXPECT_TRUE(mentions(problem, "nan")) << problem;
+}
+
+/*
+ * An infinite bound is the other half of the same refusal. It passes the
+ * negative check, and it describes a search area no draw can be outside of,
+ * which is not a bound.
+ */
+TEST(ParameterValidation, AnInfinitePositionBoundIsRefused)
+{
+  fsm_lidar_odometry::Parameters parameters;
+  parameters.xy_bound = std::bit_cast<double>(kPositiveInfinityBits);
+
+  ASSERT_EQ(std::bit_cast<std::uint64_t>(parameters.xy_bound),
+    kPositiveInfinityBits);
+
+  const std::string problem = fsm_lidar_odometry::validate(parameters);
+
+  EXPECT_FALSE(problem.empty());
+  EXPECT_TRUE(mentions(problem, "xy_bound")) << problem;
+  EXPECT_TRUE(mentions(problem, "inf")) << problem;
+}
+
+TEST(ParameterValidation, AnInfiniteOrientationBoundIsRefused)
+{
+  fsm_lidar_odometry::Parameters parameters;
+  parameters.t_bound = std::bit_cast<double>(kPositiveInfinityBits);
+
+  ASSERT_EQ(std::bit_cast<std::uint64_t>(parameters.t_bound),
+    kPositiveInfinityBits);
+
+  const std::string problem = fsm_lidar_odometry::validate(parameters);
+
+  EXPECT_FALSE(problem.empty());
+  EXPECT_TRUE(mentions(problem, "t_bound")) << problem;
+  EXPECT_TRUE(mentions(problem, "inf")) << problem;
 }
 
 /*

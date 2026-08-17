@@ -49,6 +49,19 @@ FSM::input_params asInputParams(const Parameters& parameters)
   return ip;
 }
 
+/*
+ * The exponent is inspected directly rather than asking std::isfinite, for the
+ * reason set out over isValidRange below. Unlike isValidRange this says
+ * nothing about sign or magnitude, since the settings it screens are allowed
+ * to be zero.
+ */
+bool isFinite(const double value)
+{
+  const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+
+  return ((bits >> 52) & 0x7FFU) != 0x7FFU;
+}
+
 }  // namespace
 
 /*******************************************************************************
@@ -86,9 +99,27 @@ std::string validate(const Parameters& parameters)
   if (parameters.num_iterations == 0)
     return "num_iterations must be greater than zero";
 
+  /*
+   * The two bounds are screened for a value that is not a number before they
+   * are screened for a negative one, because the second screening cannot catch
+   * the first: no ordering comparison against not-a-number succeeds, so such a
+   * value is neither negative nor non-negative and passes straight through.
+   * ROS will hand one over from a parameter file or a command line without
+   * complaint, and it reaches a search that draws poses until one falls inside
+   * the bound. None ever does. Infinity is refused alongside it, being a bound
+   * that nothing can be outside of.
+   */
+  if (!isFinite(parameters.xy_bound))
+    return "xy_bound must be a finite number, got "
+      + std::to_string(parameters.xy_bound);
+
   if (parameters.xy_bound < 0.0)
     return "xy_bound must not be negative, got "
       + std::to_string(parameters.xy_bound);
+
+  if (!isFinite(parameters.t_bound))
+    return "t_bound must be a finite number, got "
+      + std::to_string(parameters.t_bound);
 
   if (parameters.t_bound < 0.0)
     return "t_bound must not be negative, got "

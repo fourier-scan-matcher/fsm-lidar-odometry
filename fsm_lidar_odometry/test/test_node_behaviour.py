@@ -31,6 +31,7 @@ The properties that only a never started node can show live in the startup
 test, which gets a node of its own.
 """
 
+import math
 import time
 import unittest
 
@@ -253,6 +254,50 @@ class TestNodeBehaviour(unittest.TestCase):
                              'the node does not appear among the subscribers')
         self.assertEqual(subscription.qos_profile.reliability,
                          ReliabilityPolicy.RELIABLE)
+
+    def test_two_scans_sharing_a_stamp_report_no_velocity(self):
+        """
+        A repeated stamp is ordinary input and must not yield an infinity.
+
+        A replayed recording is free to carry the same stamp twice, and a
+        driver that stamps on publication rather than on acquisition can emit
+        two inside one clock tick. The displacement between the pair is still
+        measured and is still published. The velocity is not, because there is
+        no elapsed time to divide it by.
+        """
+        self.harness.call('start')
+        self.harness.publish(build_scan(FIRST_STAMP, (3.0, 2.5, 0.0)))
+        self.harness.spin()
+        self.harness.clear()
+
+        self.drive([(3.02, 2.5, 0.0), (3.04, 2.5, 0.0)],
+                   [SECOND_STAMP, SECOND_STAMP])
+
+        self.assertEqual(len(self.harness.odometry), 2,
+                         'the two scans did not both produce odometry')
+
+        moving = self.harness.odometry[0].twist.twist
+        self.assertNotEqual(
+            (moving.linear.x, moving.linear.y, moving.angular.z),
+            (0.0, 0.0, 0.0),
+            'the pair with time between them reported no velocity either, so '
+            'this case would prove nothing about the pair without')
+
+        odometry = self.harness.odometry[-1]
+        twist = odometry.twist.twist
+
+        for name, value in (('linear.x', twist.linear.x),
+                            ('linear.y', twist.linear.y),
+                            ('angular.z', twist.angular.z)):
+            self.assertTrue(math.isfinite(value),
+                            'twist %s came out as %r' % (name, value))
+            self.assertEqual(value, 0.0, name)
+
+        position = odometry.pose.pose.position
+        self.assertTrue(math.isfinite(position.x),
+                        'the measured displacement was dropped as well')
+        self.assertTrue(math.isfinite(position.y),
+                        'the measured displacement was dropped as well')
 
 
 @launch_testing.post_shutdown_test()

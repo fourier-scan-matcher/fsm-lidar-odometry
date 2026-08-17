@@ -160,6 +160,14 @@ struct RotationOutput
  * caller judges the correction, the pose it settled on, how many iterations it
  * took, and the time spent finding ray intersections, which the caller
  * accumulates across both stages.
+ *
+ * out_of_map carries the fact that the pose left the map's bounds mid pass.
+ * criterion is set to a sentinel, -2.0, in that case, but criterion is
+ * otherwise an average of per ray differences that is itself not a number
+ * whenever the pose it was computed from is, so a caller comparing criterion
+ * against that sentinel can be fooled by a bad pose into believing the map
+ * was left when it was not. out_of_map is set once, alongside the sentinel,
+ * and is what a caller should read instead.
  */
 struct TranslationOutput
 {
@@ -167,6 +175,7 @@ struct TranslationOutput
   Pose pose;
   int iterations{0};
   std::chrono::duration<double> intersections_time{};
+  bool out_of_map{false};
 };
 /* ========================================================================== */
 /*
@@ -3163,6 +3172,7 @@ class Translation
         output.iterations = it;
         output.pose = current_pose;
         output.criterion = -2.0;
+        output.out_of_map = true;
         return output;
       }
 
@@ -4261,7 +4271,7 @@ class Match
           op->translation_iterations += tr_i;
 #endif
 
-          if (tc == -2.0)
+          if (translation_output.out_of_map)
             tcs_sift.push_back(1000000.0);
           else
             tcs_sift.push_back(tc);
@@ -4395,7 +4405,7 @@ class Match
       bool l2_recovery = false;
 
       /* Perilous pose at exterior of map's bounds detected */
-      if (tc_v.back() == -2.0)
+      if (translation_output.out_of_map)
       {
 #ifdef FSM_LIDAR_ODOMETRY_TRACE
         Diagnostics::report("Will trigger recovery due to condition 0");

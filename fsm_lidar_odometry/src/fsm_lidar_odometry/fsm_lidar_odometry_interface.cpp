@@ -20,6 +20,9 @@
 #include "fsm_lidar_odometry/fsm_lidar_odometry_interface.hpp"
 
 #include <array>
+#include <bit>
+#include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -34,6 +37,19 @@ namespace fsm_lidar_odometry
 namespace
 {
 
+/*
+ * The exponent is inspected directly rather than asking std::isfinite,
+ * following the reasoning set out over isValidRange in fsm_lidar_odometry.cpp:
+ * this package ships under fast arithmetic, and a guard the compiler is
+ * allowed to fold away is no guard at all.
+ */
+bool isFinite(const double value)
+{
+  const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+
+  return ((bits >> 52) & 0x7FFU) != 0x7FFU;
+}
+
 rclcpp::QoS scanQos(const std::string& reliability, int depth)
 {
   rclcpp::QoS qos(static_cast<std::size_t>(depth));
@@ -46,8 +62,38 @@ rclcpp::QoS scanQos(const std::string& reliability, int depth)
   return qos;
 }
 
-double yawOf(const geometry_msgs::msg::Quaternion& orientation)
+/*
+ * Reading a heading out of a quaternion divides by the quaternion's own
+ * length, so one of length zero has no heading to give. Four zeros is the
+ * commonest way to arrive at one: it is what a bridge carrying ROS 1 traffic
+ * delivers for an orientation nobody set, and what anybody assembling a pose
+ * by hand produces on forgetting the fourth component. What the division then
+ * yields is up to the compiler, and neither answer is usable. A value that is
+ * not a number accumulates into every pose the node goes on to publish and no
+ * later scan clears it; a heading of zero is a bearing nobody asked for,
+ * quietly wrong for the rest of the run. Nothing is returned instead, and the
+ * caller says so.
+ *
+ * This mirrors the refusal the occupancy grid reader already makes of the same
+ * quaternion, so a pose and a map are held to one standard.
+ */
+std::optional<double> yawOf(const geometry_msgs::msg::Quaternion& orientation)
 {
+  if (!isFinite(orientation.x) || !isFinite(orientation.y) ||
+    !isFinite(orientation.z) || !isFinite(orientation.w))
+  {
+    return std::nullopt;
+  }
+
+  const double norm_squared =
+    orientation.x * orientation.x + orientation.y * orientation.y +
+    orientation.z * orientation.z + orientation.w * orientation.w;
+
+  constexpr double kMinimumQuaternionNormSquared = 1e-9;
+
+  if (norm_squared < kMinimumQuaternionNormSquared)
+    return std::nullopt;
+
   const tf2::Quaternion quaternion(
     orientation.x, orientation.y, orientation.z, orientation.w);
 
@@ -201,6 +247,22 @@ void Interface::declareParameters()
 
 /*******************************************************************************
  * Construct the lo_frame_id <- base_frame_id odometry message and publish it
+ *
+ * Two consecutive scans can carry the same stamp, and it is not a fault when
+ * they do: a replayed recording is free to repeat one, and a driver that
+ * stamps on publication rather than on acquisition can emit two inside a
+ * single clock tick. A recording that does it is more likely to be replayed
+ * than fixed, so this is an ordinary path and not an impossible one.
+ *
+ * The displacement between such a pair is measured and is published as
+ * measured, since it is the node's whole product and dropping the message to
+ * protect a field derived from it would cost more than it saved. The velocity
+ * is left at zero. A displacement over no elapsed time is not a large rate, it
+ * is no rate at all, and dividing anyway yields an infinity that any consumer
+ * folding it into a filter carries for the rest of the run with no way back. A
+ * zero is a claim about one sample that the next scan corrects. The same holds
+ * for a stamp that goes backwards, which is why the interval is required to be
+ * positive rather than merely different from zero.
  */
 void Interface::publishOdometry(const MatchResult& result,
   const rclcpp::Time& stamp, double interval)
@@ -216,9 +278,19 @@ void Interface::publishOdometry(const MatchResult& result,
   message.pose.covariance = covariance;
   message.twist.covariance = covariance;
 
-  message.twist.twist.linear.x = result.increment.x / interval;
-  message.twist.twist.linear.y = result.increment.y / interval;
-  message.twist.twist.angular.z = result.increment.t / interval;
+  if (interval > 0.0)
+  {
+    message.twist.twist.linear.x = result.increment.x / interval;
+    message.twist.twist.linear.y = result.increment.y / interval;
+    message.twist.twist.angular.z = result.increment.t / interval;
+  }
+  else
+  {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
+      "Scans %.9f seconds apart carry no velocity between them, so this "
+      "odometry message reports none. The displacement it reports stands.",
+      interval);
+  }
 
   odometry_publisher_->publish(message);
 }
@@ -429,10 +501,38 @@ void Interface::setInitialPose(
     return;
   }
 
+  /*
+   * A pose the node cannot use is refused outright rather than repaired.
+   * Whatever is put in place of it would be reported as the operator's own
+   * starting point and carried through every pose the node publishes, and
+   * there is no way to tell afterwards that it was invented here.
+   */
+  if (!isFinite(message.pose.pose.position.x) ||
+    !isFinite(message.pose.pose.position.y))
+  {
+    response->success = false;
+    response->message = "initial pose position is not a finite point";
+    RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
+    return;
+  }
+
+  const std::optional<double> yaw = yawOf(message.pose.pose.orientation);
+
+  if (!yaw.has_value())
+  {
+    response->success = false;
+    response->message =
+      "initial pose orientation carries no heading: a quaternion must be "
+      "finite and must have a length to be normalised by, and four zeros "
+      "have neither";
+    RCLCPP_ERROR(get_logger(), "%s", response->message.c_str());
+    return;
+  }
+
   const Pose pose{
     message.pose.pose.position.x,
     message.pose.pose.position.y,
-    yawOf(message.pose.pose.orientation)};
+    *yaw};
 
   matcher_->setInitialPose(pose);
 
