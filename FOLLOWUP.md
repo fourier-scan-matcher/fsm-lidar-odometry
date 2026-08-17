@@ -127,20 +127,54 @@ influence. Adding it now would invalidate a working reference for no gain. It
 matters only if the recovery path is ever compared across versions, which the
 entry above already says needs other work first.
 
-## The container has not been rebuilt since three faults were corrected in it
+## A consumer's own arithmetic settings govern the matcher it links
 
-The shell profile looked for the workspace under a path that resolved to
-`/home/`, so no shell in the shipped container had the workspace on it. The
-entrypoint took ownership of the two shared directories, which matters wherever
-a compose file bind mounts host directories over them. The build deleted the
-rosdep sources list and fetched an identical copy over a link with no retry.
+The package now exports targets a downstream package can link, and nearly all of
+the matcher is in the header, so a consumer compiles those functions itself, at
+its own flags, and its own copies are the ones its calls reach. The figures this
+package publishes were measured at the settings its own `CMakeLists.txt` sets and
+nothing characterises what tolerance holds at any other.
 
-All three are corrected. The shell one was proved by mounting the file into a
-built image of the package descended from this one, whose entrypoint drops from
-root the same way. The other two need a build to exercise, and no build has run:
-`raw.githubusercontent.com` is rate limiting this machine, which is what exposed
-the rosdep step in the first place.
+The alternative is to export the arithmetic settings as a usage requirement of
+the exported targets, which imposes them on a consumer that may have its own
+reasons for the settings it chose. Left to the readme to warn about instead.
+
+## The container's shell trim has not been through a build
+
+Three faults were corrected in this container. The shell profile looked for the
+workspace under a path that resolved to `/home/`, so no shell in the shipped
+image had the workspace on it. The entrypoint took ownership of the two shared
+directories, which matters wherever a compose file bind mounts host directories
+over them. The build deleted the rosdep sources list and fetched an identical
+copy over a link with no retry.
+
+All three are now in a built image and verified in it: a login shell lists this
+package's executable and `colcon_cd` is a function, the entrypoint carries no
+`chown` of the shared directories, and the image holds the sources list the base
+image ships, byte for byte the file the deleted step used to fetch.
+
+What that build predates is the general half of the shell profile, cut from
+eleven hundred and fifty six lines of somebody's personal configuration to fifty
+six this package owns, and the entrypoint's comments about an X authority file
+and a workspace mount that no compose file declares, removed with it. Both were
+proved by mounting the new file into the built image over its own copy, and
+neither has been through an image build.
 
 Two network fetches remain in the build, `rosdep update` and the lookup that
 finds the current ROS apt source release. Both genuinely need the network and
 neither retries.
+
+## The container cannot be told to run the node
+
+Its main process is a shell. The entrypoint drops from root to the container's
+user and execs whatever it was given without sourcing the ROS environment first,
+so giving the compose file a `command` that runs the node would meet `ros2:
+command not found`. The environment comes from the user's shell profile and from
+nowhere else.
+
+So `docker compose up` starts a container sitting in a shell rather than a
+running node, and the node has to be launched into it afterwards. The readme
+says so and gives the two arguments an `exec` needs. Making the container run
+the node on its own means sourcing the environment in the entrypoint, which is a
+small change to a file inherited verbatim from an upstream project and is left
+for a decision about what the shipped container is for.
