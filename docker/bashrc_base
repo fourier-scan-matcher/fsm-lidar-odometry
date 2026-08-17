@@ -1,31 +1,11 @@
-# The general half of the container's shell profile. The ROS half is in
-# bashrc_ros2, which this file knows nothing about.
-#
-# What was here before was a personal shell configuration of eleven hundred
-# lines, carried in from the machine of whoever built the first image in this
-# family: git helpers, docker helpers, an http server, a prompt that ran git
-# status four times before drawing itself, and a cp that was quietly rsync.
-# None of it belonged to this package and none of it was needed to build or run
-# it, while all of it was shipped to anybody who opened a shell in the image.
-# What remains is what a person needs to see where they are and to type the
-# commands this package's readme asks them to type.
-#
-# There is deliberately no CXX or CC here. Setting them would give a shell
-# opened by a person a different compiler from a script entering the same
-# container, and this container exists to reproduce published numbers.
-
-# Nothing below matters to a non interactive shell.
 [ -z "$PS1" ] && return
 
-# History worth searching: duplicates dropped, appended rather than overwritten
-# so two shells do not overwrite each other.
 HISTCONTROL=ignoredups:erasedups
 HISTSIZE=100000
 HISTFILESIZE=100000
 shopt -s histappend
 shopt -s checkwinsize
 
-# Tab completion, and with it the branch name helper the prompt uses below.
 if [ -f /etc/bash_completion ] && ! shopt -oq posix; then
   source /etc/bash_completion
 fi
@@ -34,8 +14,6 @@ if [ -f /etc/bash_completion.d/git-prompt ]; then
   source /etc/bash_completion.d/git-prompt
 fi
 
-# Who, where, and which branch, with a star when the tree is dirty. The branch
-# is asked for only when the helper that answers it was found.
 export GIT_PS1_SHOWDIRTYSTATE=1
 
 if type -t __git_ps1 > /dev/null; then
@@ -44,7 +22,6 @@ else
   PS1='\[\033[0;94m\]\u@\h\[\033[0m\]:\[\033[0;32m\]\w\[\033[0m\]\$ '
 fi
 
-# Colour, and the three listings everybody types.
 if [ -x /usr/bin/dircolors ]; then
   eval "$(dircolors -b)"
   alias ls='ls --color=auto'

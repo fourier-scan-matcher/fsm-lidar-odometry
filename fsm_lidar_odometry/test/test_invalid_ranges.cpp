@@ -18,17 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * Scans carrying rays the sensor could not measure.
- *
- * A driver reports such a ray as zero, as infinity, or as not-a-number,
- * depending on its conventions. Only zero was recognised before; the other two
- * went into the frequency transform as though they were distances, and a
- * single one of them contaminates every coefficient the transform produces.
- *
- * The property these tests pin is that all three forms mean the same thing.
- */
-
 #include <gtest/gtest.h>
 
 #include <bit>
@@ -41,27 +30,10 @@
 
 namespace
 {
-
 const std::size_t kSize = 360;
 const double kInfinity = std::numeric_limits<double>::infinity();
 const double kNotANumber = std::numeric_limits<double>::quiet_NaN();
 
-/*
- * Whether `value` is neither infinite nor not-a-number, read off its
- * exponent bits rather than asked of `std::isfinite`. This target currently
- * sits in the CMake group that forces `-fno-fast-math`, and under that
- * setting `std::isfinite` genuinely answers the question. But `-Ofast` is
- * what this package ships, and `-Ofast` implies `-ffinite-math-only`, under
- * which the compiler is entitled to assume no infinity or not-a-number ever
- * exists and folds `std::isfinite` to a constant `true`. Moving this target
- * out of the exact arithmetic group, for any reason, would turn the three
- * assertions below into assertions that always pass, with nothing failing to
- * say so. `isValidRange` in `fsm_lidar_odometry.cpp` and `isFinite` in
- * `fsm_core.hpp`'s `DFTUtils` already met this trap and read the bits
- * instead; this is the same remedy, kept independent of both since a test
- * has no business depending on the production code it is not exercising
- * here.
- */
 bool isFinite(const double value)
 {
   const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
@@ -109,7 +81,7 @@ fsm_lidar_odometry::Pose matchWith(std::vector<double> second)
   return result.has_value() ? result->increment : fsm_lidar_odometry::Pose{};
 }
 
-}  // namespace
+}
 
 TEST(InvalidRanges, ZeroInfinityAndNotANumberAreAllTreatedAsNoReading)
 {
@@ -215,11 +187,6 @@ TEST(RecoverySeed, TheSameSeedProducesTheSameSequence)
   const std::vector<std::pair<double, double>> map{
     {-4.0, -4.0}, {4.0, -4.0}, {4.0, 4.0}, {-4.0, 4.0}};
 
-  /*
-   * A seed takes effect once and the stream runs on from there, which is what
-   * makes a whole session replayable. Returning to a seed therefore has to go
-   * by way of a different one, exactly as restarting the process would.
-   */
   const auto draw = [&](const unsigned int seed)
   {
     std::vector<double> drawn;

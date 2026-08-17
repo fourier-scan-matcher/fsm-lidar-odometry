@@ -18,35 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * Characterisation tests for the defects corrected on this branch.
- *
- * Every case here is written to fail against the code as published and to pass
- * once the corresponding correction lands. Run them before correcting anything
- * and record the failures; that record is the evidence that each correction
- * changes what it claims to change.
- *
- * Coverage of the seven defects:
- *
- *   D1  computeTransform mixes single and double precision. Covered directly by
- *       TransformIsAProperRotation and TransformMatchesDoublePrecisionTrig.
- *   D2  serviceInitialPose builds the same matrix inline, also in single
- *       precision. Its correction is to delete the duplicate and delegate to
- *       computeTransform, so the arithmetic is covered by the D1 cases above.
- *       The delegation itself is a structural fact, not a numerical one, and is
- *       asserted by the node level test that an initial pose survives a round
- *       trip. No separate arithmetic case is possible here without duplicating
- *       the very code under test.
- *   D3  tffCore takes a single precision square root. Covered by
- *       FirstCoefficientNormIsDoublePrecision.
- *   D4  parameter fallback writes to the wrong field. Node level test.
- *   D5  frame id defaults carry a leading slash. Node level test.
- *   D6  two asserts are tautologies on unsigned types. No observable behaviour,
- *       therefore no test. Exempt, and recorded here so the gap is visible.
- *   D7  output is stamped from the wall clock, not from the scan. Node level
- *       test.
- */
-
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -56,7 +27,6 @@
 
 namespace
 {
-
 const double kAngle = 0.7853981633974483;
 const double kTightTolerance = 1e-12;
 
@@ -66,7 +36,7 @@ Eigen::Matrix3d rotationOnly(const double& angle)
     FSM::Pose{0.0, 0.0, angle}, Eigen::Matrix3d::Identity());
 }
 
-}  // namespace
+}
 
 TEST(ComputeTransform, TransformIsAProperRotation)
 {
@@ -139,11 +109,6 @@ TEST(TranslationStage, FirstCoefficientNormIsDoublePrecision)
 {
   const unsigned int size = 360;
 
-  /*
-   * The amplitudes are deliberately awkward. Round ones make the norm of the
-   * first coefficient land on a value that single precision happens to
-   * represent exactly, and the defect then has nothing to round away.
-   */
   std::vector<double> real_scan(size, 0.0);
   std::vector<double> virtual_scan(size, 0.0);
   for (unsigned int i = 0; i < size; i++)

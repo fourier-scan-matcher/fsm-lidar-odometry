@@ -22,7 +22,6 @@
  * @brief Characterisation test for the finite checks the transform stage
  * relies on to keep a non finite Fourier coefficient out of the rotation
  * estimate.
- *
  * DFTUtils::getFirstDFTCoefficient replaces a non finite real or imaginary
  * part of the first coefficient with zero, guarded by a check on the value.
  * This package ships compiled with -Ofast, which implies -ffinite-math-only,
@@ -31,7 +30,6 @@
  * down to a constant true. The guard was written with exactly that call, so
  * in the configuration this package ships it did nothing: a non finite
  * coefficient passed straight through.
- *
  * This file is deliberately not built with the exact floating point settings
  * the rest of the suite forces, and is not linked against the shared library.
  * It pins the shipping arithmetic on its own target rather than taking
@@ -46,7 +44,6 @@
  * transform not-a-number too, since a discrete Fourier transform is a linear
  * combination of every sample, so the effect on the first coefficient is
  * whatever finite check the transform stage happens to be running that build.
- *
  * The result is read back by comparing bit patterns rather than with a plain
  * double comparison. Measured directly: under this file's own -Ofast, an
  * unreplaced not-a-number compares equal to 0.0 with the ordinary == operator,
@@ -78,13 +75,12 @@
 
 namespace
 {
-
 std::uint64_t bitsOf(const double value)
 {
   return std::bit_cast<std::uint64_t>(value);
 }
 
-}  // namespace
+}
 
 TEST(FiniteGuard, NonFiniteCoefficientIsZeroedInTheShippedBuild)
 {
@@ -106,7 +102,6 @@ TEST(FiniteGuard, NonFiniteCoefficientIsZeroedInTheShippedBuild)
 /**
  * @brief Characterisation test for the equality check the translation stage
  * used to detect a pose that had left the map.
- *
  * Translation::tff used to signal that a pose left the map only by returning
  * a criterion of exactly -2.0, leaving a caller to compare its result
  * against that literal to decide whether to recover. -ffinite-math-only
@@ -118,7 +113,6 @@ TEST(FiniteGuard, NonFiniteCoefficientIsZeroedInTheShippedBuild)
  * caller could have trusted either answer. TranslationOutput now carries
  * out_of_map as a plain boolean set only where a pose genuinely leaves the
  * map, removing the comparison rather than hoping it behaves.
- *
  * A criterion of not-a-number without a pose that ever left the map is
  * reachable without deliberately calling l2recovery: one non finite ray in
  * the input scan makes every coefficient of its transform non finite, which

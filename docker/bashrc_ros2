@@ -1,63 +1,21 @@
 source /opt/ros/lyrical/setup.bash
 
-# $HOME rather than /home/$USER: the entrypoint drops from root through gosu,
-# which sets HOME and does not set USER, so the old path collapsed to /home/ and
-# every shell opened without the workspace on it.
-#
-# Said out loud when it is missing rather than skipped silently: without it
-# nothing in the workspace is on the path, and "package not found" is a worse
-# thing to be told than which file was not there.
 if [ -f "${HOME}/ros2_ws/install/local_setup.bash" ]; then
   source "${HOME}/ros2_ws/install/local_setup.bash"
 else
   echo "no workspace at ${HOME}/ros2_ws/install: nothing in it is on the path" >&2
 fi
-#export ROS_LOCALHOST_ONLY=0
-#export ROS_DOMAIN_ID=128
 
-# DDS choice (https://github.com/sea-bass/turtlebot3_behavior_demos#local-setup)
-#export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-#export CYCLONEDDS_URI=file://$HOME/cyclonedds.conf.xml
-
-# https://github.com/Martin-Oehler/ros2cd
-#source ~/.ros2cd.sh
-# ------------------------------------------------------------------------------
-# ROS 2 output format
-# ------------------------------------------------------------------------------
-# give color to rclcpp_{warn, error}
 export RCUTILS_COLORIZED_OUTPUT=1
 
-# By default, ROS 2 logger doesn't output detailed information such as file name, function name, or line number
 export RCUTILS_CONSOLE_OUTPUT_FORMAT="[{severity} {time}][{name}]: {message} ({function_name}() at {file_name}:{line_number})"
-# ------------------------------------------------------------------------------
-# Colcon
-# ------------------------------------------------------------------------------
-# colcon command completion
 source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
-# register-python-argcomplete3 was renamed to register-python-argcomplete
-# upstream, dropping the version suffix; the old name no longer exists on
-# this release.
 eval "$(register-python-argcomplete ros2)"
 eval "$(register-python-argcomplete colcon)"
 
-# colcon cd
-# colcon_cd.sh moved from /usr/share/colcon_cd/function/ to /etc/profile.d/
-# on this release.
 source /etc/profile.d/colcon_cd.sh
 export _colcon_cd_root=/opt/ros/lyrical/
 alias roscd='colcon_cd'
-# ------------------------------------------------------------------------------
-# colcon_build: Build ROS 2 packages in a specified or default workspace
-#
-# Usage:
-#   colcon_build [--ws <workspace_path>] (--all | --packages-select <pkg1> [<pkg2> ...])
-#   colcon_build -h | --help
-#
-# Options:
-#   --ws <workspace_path>     Path to the ROS 2 workspace (default: ~/ros2_ws)
-#   --all                     Build all packages in the workspace
-#   --packages-select <pkgs>  Build only the specified packages
-#   -h, --help                Show this help message
 function colcon_build()
 {
   function usage() {
@@ -125,18 +83,6 @@ function colcon_build()
 
   cd "$dir" || return
 }
-# ------------------------------------------------------------------------------
-# colcon_clean: Clean ROS 2 build artifacts in a specified or default workspace
-#
-# Usage:
-#   colcon_clean [--ws <workspace_path>] (--all | --packages-select <pkg1> [<pkg2> ...])
-#   colcon_clean -h | --help
-#
-# Options:
-#   --ws <workspace_path>     Path to the ROS 2 workspace (default: ~/ros2_ws)
-#   --all                     Clean entire workspace
-#   --packages-select <pkgs>  Clean only the specified packages
-#   -h, --help                Show this help message
 function colcon_clean()
 {
   function usage() {
@@ -202,4 +148,3 @@ function colcon_clean()
 
   cd "$dir" || return
 }
-# ------------------------------------------------------------------------------

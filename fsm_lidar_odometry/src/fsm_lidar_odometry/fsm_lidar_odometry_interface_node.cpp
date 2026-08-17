@@ -20,7 +20,7 @@
 
 /**
  * @brief Instantiates the interface class to be used for triggering the
- *        functionality the node provides
+ * functionality the node provides
  */
 #include "fsm_lidar_odometry/fsm_lidar_odometry_interface.hpp"
 

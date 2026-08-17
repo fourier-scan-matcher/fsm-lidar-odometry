@@ -83,7 +83,6 @@ class TestNodeBehaviour(unittest.TestCase):
         self.harness.wait_for_connection()
         self.harness.spin(0.5)
 
-        # One node serves every case here, so put it somewhere known first.
         self.harness.call('stop')
         self.harness.call('clear_estimated_trajectory')
         self.harness.clear()
@@ -242,8 +241,6 @@ class TestNodeBehaviour(unittest.TestCase):
         deadline = time.monotonic() + 20.0
         subscription = None
 
-        # Nothing else in this test subscribes to the scan topic, so whatever
-        # turns up there is the node under test.
         while subscription is None and time.monotonic() < deadline:
             found = self.harness.get_subscriptions_info_by_topic('/base_scan')
             if found:

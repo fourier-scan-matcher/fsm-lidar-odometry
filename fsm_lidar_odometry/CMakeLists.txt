@@ -9,39 +9,15 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ------------------------------------------------------------------------------
-# FSM_LIDAR_ODOMETRY_EXACT_FP=ON replaces -Ofast with optimisation settings that forbid the
-# compiler from reassociating floating point arithmetic or contracting
-# multiply-adds. Two compilers reassociate differently, so a reference build and
-# a build under test only produce comparable numbers when this is on.
-#
-# FSM_LIDAR_ODOMETRY_DETERMINISTIC_FFT=ON makes FFTW select its plan by heuristic rather
-# than by timing itself. Plan choice affects rounding, so without this the same
-# binary can produce different numbers on two consecutive runs.
-#
-# Both default to OFF, which is the configuration this package ships with. The
-# tests below force both ON regardless, since their tolerances are meaningless
-# otherwise.
-# ------------------------------------------------------------------------------
 option(FSM_LIDAR_ODOMETRY_EXACT_FP "Forbid floating point reassociation and contraction" OFF)
 option(FSM_LIDAR_ODOMETRY_DETERMINISTIC_FFT "Select FFTW plans by heuristic, not by timing" OFF)
 
 if(FSM_LIDAR_ODOMETRY_EXACT_FP)
   add_compile_options(-O2 -fno-fast-math -ffp-contract=off)
 else()
-  # -Ofast turns on -ffast-math, which turns on -ffinite-math-only. That sub
-  # flag lets the compiler assume no infinity or not-a-number value ever
-  # occurs, which folds a check written to catch one into a no-op and can
-  # make an equality comparison against a literal report true for a value
-  # that is not a number. Disabling it costs a parity check on the rare
-  # double equality comparison this package's hot loops make, and keeps
-  # every other relaxation -Ofast brings: the higher optimisation level,
-  # reassociation, reciprocal approximations, signed zero and trapping
-  # assumptions, and flush to zero.
   add_compile_options(-Ofast -fno-finite-math-only)
 endif()
 
-# ------------------------------------------------------------------------------
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -57,9 +33,6 @@ find_package(CGAL REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW3 REQUIRED IMPORTED_TARGET fftw3)
 
-# ------------------------------------------------------------------------------
-# The core: the matcher and the odometry state it drives. No ROS anywhere in
-# here, so it can be tested without a ROS installation present.
 add_library(fsm_lidar_odometry_core SHARED
   src/fsm_lidar_odometry/fsm_lidar_odometry.cpp)
 
@@ -76,8 +49,6 @@ if(FSM_LIDAR_ODOMETRY_DETERMINISTIC_FFT)
   target_compile_definitions(fsm_lidar_odometry_core PUBLIC FSM_LIDAR_ODOMETRY_FFTW_ESTIMATE)
 endif()
 
-# ------------------------------------------------------------------------------
-# The ROS interface, and the executable that runs it.
 add_library(fsm_lidar_odometry_interface SHARED
   src/fsm_lidar_odometry/fsm_lidar_odometry_interface.cpp)
 
@@ -97,15 +68,9 @@ add_executable(fsm_lidar_odometry_interface_node
 
 target_link_libraries(fsm_lidar_odometry_interface_node fsm_lidar_odometry_interface)
 
-# ------------------------------------------------------------------------------
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
 
-  # The two formatting linters impose a brace and wrapping style that this
-  # package has never used, and the core header is 3800 lines of inherited code
-  # whose arithmetic must not be disturbed. Reformatting it to satisfy a linter
-  # would be the single riskiest change in the package for no behavioural gain.
-  # Everything that checks something other than formatting stays on.
   set(ament_cmake_uncrustify_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
 
@@ -113,24 +78,6 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_gtest REQUIRED)
 
-  # The tests assert agreement to 1e-9 and tighter. Under fast arithmetic the
-  # compiler is free to reassociate, which moves results well past that, so a
-  # passing test would say nothing. Force the exact configuration here whatever
-  # the library itself was configured with.
-  #
-  # That forcing is why the suites below compile the core into themselves
-  # through this object library rather than linking fsm_lidar_odometry_core.
-  # Nearly everything the core is lives in a header, as functions the compiler
-  # is free to emit into every translation unit that uses them, and two copies
-  # compiled under different arithmetic settings are two different functions
-  # wearing one name. A test that both compiled the header under exact
-  # settings and linked a library built under the shipped ones therefore held
-  # two definitions of each, and which one every call reached was decided by
-  # the order the linker happened to see them: a test could assert a tolerance
-  # it was not in fact measuring, and the library's own internal calls could
-  # be answered by the test's copies. Compiled in here instead, every
-  # definition in a test binary comes from one configuration, which is the
-  # configuration the test asked for.
   add_library(fsm_lidar_odometry_core_exact OBJECT
     src/fsm_lidar_odometry/fsm_lidar_odometry.cpp)
 
@@ -157,36 +104,6 @@ if(BUILD_TESTING)
   ament_add_gtest(test_fsm_lidar_odometry_dft
     test/test_dft.cpp)
 
-  # Characterises the four finite checks in the transform stage that
-  # -Ofast's -ffinite-math-only folds to a no-op. Deliberately not part of the
-  # foreach loop below: that loop forces the exact floating point
-  # configuration precisely so this one target does not get it, since the
-  # whole point is to run this file under the configuration the package
-  # actually ships. It is also not linked against fsm_lidar_odometry_core, so
-  # its own compile flags, not the library's, are what govern the code that
-  # runs.
-  #
-  # The shipping configuration is pinned on the target rather than inherited
-  # from directory scope, because FSM_LIDAR_ODOMETRY_EXACT_FP=ON rewrites
-  # directory scope to the exact settings and would otherwise turn the one file
-  # written to defeat the optimiser into another copy of the same safe build.
-  # Three things make the pin fussier than it looks, and getting any of them
-  # wrong yields a target that reads as pinned and is not:
-  #
-  #   * FSM_LIDAR_ODOMETRY_EXACT_FP=ON rewrites directory scope to
-  #     -fno-fast-math and -ffp-contract=off, and directory options precede
-  #     target options on the command line, so both have to be restated to be
-  #     undone.
-  #   * gcc applies the flags implied by an -O level before it applies any
-  #     explicit flag, so a later -Ofast on its own does not undo an earlier
-  #     explicit -fno-fast-math. -ffast-math has to be named outright.
-  #   * cmake de-duplicates compile options, so a flag restated here that also
-  #     appears at directory scope is dropped from this list rather than moved
-  #     to the end of it. That silently reorders the rest, and -ffast-math
-  #     landing after -fno-finite-math-only turns finite math back on. The
-  #     SHELL: prefix is what keeps the four flags together and in order.
-  #
-  # The file fails to compile if this is ever weakened.
   ament_add_gtest(test_fsm_lidar_odometry_finite_guard
     test/test_finite_guard.cpp)
   target_include_directories(test_fsm_lidar_odometry_finite_guard PRIVATE
@@ -209,13 +126,6 @@ if(BUILD_TESTING)
   ament_add_gtest(test_fsm_lidar_odometry_params
     test/test_params.cpp)
 
-  # Characterises the out of bounds read in Match::fmtdbh's candidate angle
-  # sift. Deliberately not linked against fsm_lidar_odometry_core, and given
-  # its own -D_GLIBCXX_ASSERTIONS on top of the exact floating point settings
-  # every other suite already forces, so libstdc++'s own bounds check on
-  # std::vector::operator[] is what catches the defect in this file's own
-  # compiled code, rather than in whatever fsm_lidar_odometry_core happened to
-  # be built with.
   ament_add_gtest(test_fsm_lidar_odometry_rotation_criterion_carryover
     test/test_rotation_criterion_carryover.cpp)
   target_include_directories(test_fsm_lidar_odometry_rotation_criterion_carryover PRIVATE
@@ -239,21 +149,6 @@ if(BUILD_TESTING)
 
   find_package(launch_testing_ament_cmake REQUIRED)
 
-  # The launch runner imports a test file directly rather than through pytest,
-  # so the directory holding the shared helpers has to be on the import path
-  # for it. Setting it here keeps the test files free of path manipulation.
-  #
-  # Each file starts a node of its own, and all three use the same node name and
-  # the same topic names. Left in one DDS domain they hear each other: a case
-  # asserting that its node has published nothing yet sees what another file's
-  # started node published, and a node running outside the tests answers
-  # alongside them. Three files are few enough that they have so far passed
-  # together by luck; the package this one is descended from has eight and lost
-  # twenty four cases to exactly this. A domain per file is what keeps each test
-  # hearing only itself. The numbers are arbitrary and only have to differ.
-  #
-  # The startup contract needs a node nothing has touched, so it launches its
-  # own rather than sharing the one the behaviour tests drive.
   add_launch_test(test/test_node_startup.py TIMEOUT 300
     ENV ROS_DOMAIN_ID=81
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
@@ -261,10 +156,6 @@ if(BUILD_TESTING)
     ENV ROS_DOMAIN_ID=82
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
 
-  # The initial pose cases launch their own node for a different reason: the
-  # service they drive holds the node until a message arrives on the initial
-  # pose topic, which is not a state to hand on to a case expecting an
-  # answer.
   add_launch_test(test/test_initial_pose.py TIMEOUT 300
     ENV ROS_DOMAIN_ID=83
     APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}/test)
@@ -281,13 +172,6 @@ if(BUILD_TESTING)
   endforeach()
 endif()
 
-# ------------------------------------------------------------------------------
-# The two libraries go into an export set rather than being installed loose, so
-# that a consumer's find_package(fsm_lidar_odometry) yields imported targets
-# carrying this package's include directories and its link dependencies.
-# Announcing include directories and library names alone, as this file did,
-# leaves a consumer to rediscover Eigen, CGAL and FFTW3 for itself and to guess
-# the link order, which is the same as announcing nothing usable.
 install(TARGETS
   fsm_lidar_odometry_core
   fsm_lidar_odometry_interface
@@ -308,10 +192,6 @@ install(DIRECTORY launch config
 
 ament_export_targets(export_fsm_lidar_odometry HAS_LIBRARY_TARGET)
 
-# What the two libraries expose in their own headers, and therefore what a
-# consumer has to have found before it can compile against them. FFTW3 is the
-# exception: it has no CMake package to find, so the extras file below builds
-# its imported target the same way this file does.
 ament_export_dependencies(
   rclcpp
   sensor_msgs

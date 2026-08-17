@@ -18,26 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * The two stages on their own, on the two trajectories built to isolate them:
- * one that only turns and one that only moves.
- *
- * Neither stage recovers a pose increment on its own, and a test written as
- * though it should would be wrong about the algorithm rather than about the
- * code. The rotation stage answers with whole steps of the scan's angular
- * resolution, halved for each level of magnification, so its answer to a turn
- * that falls between two steps is one of the two. The translation stage
- * corrects a little at a time and needs tens of iterations to arrive. The
- * matcher gets a full answer by alternating them and raising the magnification,
- * which is what the golden comparison exercises end to end.
- *
- * What is pinned here is what each stage is separately responsible for.
- *
- * The scans and the poses that produced them come from the generator, which
- * computes ranges by intersecting rays with a room analytically and shares no
- * code with what is being tested.
- */
-
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -50,10 +30,8 @@
 
 namespace
 {
-
 const std::size_t kSize = 360;
 
-/* One ray of the unmagnified scan. */
 const double kStep = 2 * M_PI / kSize;
 
 std::string fixture(const std::string& name)
@@ -106,7 +84,6 @@ std::vector<FSM::Pose> readTruth(const std::string& name)
   return poses;
 }
 
-/* The reference scan seen as a room, which is what both stages match against. */
 std::vector<std::pair<double, double>> mapOf(const std::vector<double>& scan)
 {
   return FSM::Utils::scan2points(scan, FSM::Pose{});
@@ -121,13 +98,8 @@ double closestTo(const std::vector<double>& candidates, const double target)
   return best;
 }
 
-}  // namespace
+}
 
-/*
- * A trajectory that only turns. The rotation stage's candidates are whole
- * steps of its resolution, so the closest of them is within one step of the
- * true turn, and never further.
- */
 TEST(RotationStage, RecoversATurnToTheResolutionItHas)
 {
   const std::vector<std::vector<double>> scans =
@@ -164,11 +136,6 @@ TEST(RotationStage, RecoversATurnToTheResolutionItHas)
   }
 }
 
-/*
- * Magnification is what buys the accuracy: each level halves the step, so the
- * candidates at a higher level are drawn from a finer grid. The finest level
- * must therefore get at least as close as the coarsest.
- */
 TEST(RotationStage, MagnificationDoesNotMakeTheAnswerWorse)
 {
   const std::vector<std::vector<double>> scans =
@@ -197,10 +164,6 @@ TEST(RotationStage, MagnificationDoesNotMakeTheAnswerWorse)
   }
 }
 
-/*
- * A trajectory that only moves. The rotation stage must find nothing to turn,
- * exactly, at every level of magnification.
- */
 TEST(RotationStage, FindsNoTurnWhereThereIsNone)
 {
   const std::vector<std::vector<double>> scans =
@@ -224,10 +187,6 @@ TEST(RotationStage, FindsNoTurnWhereThereIsNone)
   }
 }
 
-/*
- * A trajectory that only moves, given enough iterations, is recovered by the
- * translation stage alone to a fraction of a millimetre.
- */
 TEST(TranslationStage, RecoversAMoveGivenEnoughIterations)
 {
   const std::vector<std::vector<double>> scans =
@@ -251,12 +210,6 @@ TEST(TranslationStage, RecoversAMoveGivenEnoughIterations)
   }
 }
 
-/*
- * The correction is made a little at a time, so more iterations must not be
- * worse than fewer. This is the property the criterion is there to protect,
- * and the one that would break if the correction were being applied with the
- * wrong sign or scaled wrongly.
- */
 TEST(TranslationStage, MoreIterationsDoNotMakeTheAnswerWorse)
 {
   const std::vector<std::vector<double>> scans =
@@ -282,12 +235,6 @@ TEST(TranslationStage, MoreIterationsDoNotMakeTheAnswerWorse)
   }
 }
 
-/*
- * The translation stage does not turn anything. It reports the orientation it
- * was given, whatever that was. Both callers used to pass the same object in
- * and out and rely on the field being left alone; nothing relies on that now,
- * and this is what holds it.
- */
 TEST(TranslationStage, LeavesTheOrientationAsItFoundIt)
 {
   const std::vector<std::vector<double>> scans =
@@ -307,13 +254,6 @@ TEST(TranslationStage, LeavesTheOrientationAsItFoundIt)
   }
 }
 
-/*
- * The two stages are not independent, and this is why the matcher alternates
- * them rather than running each once. A turn with no movement looks like a
- * movement to a stage that cannot turn, and the translation stage duly reports
- * a displacement that never happened. Its size is roughly the turn times the
- * distance to the walls.
- */
 TEST(TranslationStage, MistakesATurnForAMove)
 {
   const std::vector<std::vector<double>> scans =
@@ -335,16 +275,6 @@ TEST(TranslationStage, MistakesATurnForAMove)
        "the input or the stage has changed";
 }
 
-/*
- * The core reports in plain strings and hands each one to whatever the host
- * installed. Where nothing is installed the line is dropped, which is what a
- * library with nobody listening should do.
- *
- * Almost everything the core has to say is stage timing that an ordinary build
- * compiles out. The one complaint it can raise in an ordinary build is being
- * handed a rotation mode it does not know, so that is what is used here to
- * make it speak.
- */
 TEST(Diagnostics, TheCoreReportsThroughWhateverTheHostInstalls)
 {
   const std::vector<std::vector<double>> scans =
@@ -355,7 +285,6 @@ TEST(Diagnostics, TheCoreReportsThroughWhateverTheHostInstalls)
   const fftw_plan inverse = FSM::DFTUtils::inversePlan(kSize);
   const std::vector<std::pair<double, double>> map = mapOf(scans[0]);
 
-  /* Nothing installed, so nothing is said and nothing goes wrong. */
   FSM::Rotation::fmt(scans[1], FSM::Pose{}, map, 0, "spiral", forward, inverse,
     FSM::RaySearch::angular);
 
@@ -373,7 +302,6 @@ TEST(Diagnostics, TheCoreReportsThroughWhateverTheHostInstalls)
   EXPECT_EQ(reported[0].back() != '\n', true)
     << "the sink decides how a line ends, not the core";
 
-  /* And uninstalled again, so a later test is not still being listened to. */
   FSM::Rotation::fmt(scans[1], FSM::Pose{}, map, 0, "spiral", forward, inverse,
     FSM::RaySearch::angular);
   EXPECT_EQ(reported.size(), 1u);

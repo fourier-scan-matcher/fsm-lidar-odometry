@@ -35,8 +35,4 @@
     <build_type>ament_cmake</build_type>
   </export>
 
-  <!-- FFTW3 and CGAL have no ament wrapper. CMake locates them directly, and
-       rosdep installs them from the cgal and libfftw3 keys declared above.
-       pkg-config is what locates FFTW3, here and in any package that consumes
-       this one's exported targets. -->
 </package>

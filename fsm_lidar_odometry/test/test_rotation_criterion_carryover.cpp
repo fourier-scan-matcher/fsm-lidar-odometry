@@ -21,7 +21,6 @@
 /**
  * @brief Characterisation test for an out of bounds read in the matcher's
  * main loop.
- *
  * Match::fmtdbh keeps a running best candidate angle across the while loop's
  * iterations. Each iteration appends that angle to the rotation stage's own
  * candidates when it is not already among them, sifts the whole list by
@@ -32,7 +31,6 @@
  * afterwards, so the read runs one past the end of both vectors whenever that
  * appended angle wins the sift, which happens whenever the previous best
  * beats every angle the rotation stage found this time round.
- *
  * This is built with -D_GLIBCXX_ASSERTIONS so libstdc++'s own bounds check on
  * std::vector::operator[] is what catches the defect, rather than relying on
  * a sanitiser or on the read happening to land somewhere that changes the
@@ -58,22 +56,6 @@
 
 namespace
 {
-
-/*
- * Whether `value` is neither infinite nor not-a-number, read off its
- * exponent bits rather than asked of `std::isfinite`. This target is built
- * with `-fno-fast-math`, and under that setting `std::isfinite` genuinely
- * answers the question, but `-Ofast` is what this package ships, and
- * `-Ofast` implies `-ffinite-math-only`, under which the compiler is
- * entitled to assume no infinity or not-a-number ever exists and folds
- * `std::isfinite` to a constant true. Should this target's flags ever drift
- * towards what the package ships, the three assertions below would still
- * mean what they say rather than silently passing regardless of the pose
- * they are given. `isFinite` in `fsm_core.hpp`'s `DFTUtils` already met this
- * trap and reads the bits instead; this is the same remedy, kept
- * independent of it since a test has no business depending on the
- * production code it is not exercising here.
- */
 bool isFinite(const double value)
 {
   const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
@@ -117,18 +99,6 @@ FSM::input_params defaultParams()
   return ip;
 }
 
-/*
- * Matches every later scan in a fixture against the first one, rather than
- * against its immediate predecessor. The first scan of each fixture stands as
- * a fixed map, and every scan after it is asked for directly, so the
- * displacement the matcher has to recover grows with each one rather than
- * staying at one small step. Chaining consecutive scans instead, the way the
- * odometry wrapper does, never reproduced the defect: each step is close
- * enough to the last that the rotation stage finds a genuine candidate ahead
- * of the carried-over one at every magnification, so the carried-over entry
- * never wins the sift. Asking for a larger displacement in one go stresses
- * exactly the path that does.
- */
 void driveScenario(const std::string& scenario)
 {
   const std::vector<std::vector<double>> scans =
@@ -153,7 +123,7 @@ void driveScenario(const std::string& scenario)
   }
 }
 
-}  // namespace
+}
 
 TEST(RotationCriterionCarryover, PureRotationStaysWithinBounds)
 {

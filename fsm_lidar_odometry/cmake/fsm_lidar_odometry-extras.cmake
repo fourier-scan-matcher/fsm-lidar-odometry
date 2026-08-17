@@ -18,11 +18,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# FFTW3 ships no CMake package, so ament_export_dependencies cannot carry it and
-# a consumer of the exported targets would be left with an imported target that
-# nothing defines. This file is included by fsm_lidar_odometryConfig.cmake and
-# builds that target from pkg-config, exactly as this package's own CMakeLists
-# does for its own build.
 find_package(PkgConfig REQUIRED)
 
 if(NOT TARGET PkgConfig::FFTW3)

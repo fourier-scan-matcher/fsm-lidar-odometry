@@ -17,6 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
 #include "fsm_lidar_odometry/fsm_lidar_odometry_interface.hpp"
 
 #include <array>
@@ -33,16 +34,8 @@
 
 namespace fsm_lidar_odometry
 {
-
 namespace
 {
-
-/*
- * The exponent is inspected directly rather than asking std::isfinite,
- * following the reasoning set out over isValidRange in fsm_lidar_odometry.cpp:
- * this package ships under fast arithmetic, and a guard the compiler is
- * allowed to fold away is no guard at all.
- */
 bool isFinite(const double value)
 {
   const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
@@ -62,21 +55,6 @@ rclcpp::QoS scanQos(const std::string& reliability, int depth)
   return qos;
 }
 
-/*
- * Reading a heading out of a quaternion divides by the quaternion's own
- * length, so one of length zero has no heading to give. Four zeros is the
- * commonest way to arrive at one: it is what a bridge carrying ROS 1 traffic
- * delivers for an orientation nobody set, and what anybody assembling a pose
- * by hand produces on forgetting the fourth component. What the division then
- * yields is up to the compiler, and neither answer is usable. A value that is
- * not a number accumulates into every pose the node goes on to publish and no
- * later scan clears it; a heading of zero is a bearing nobody asked for,
- * quietly wrong for the rest of the run. Nothing is returned instead, and the
- * caller says so.
- *
- * This mirrors the refusal the occupancy grid reader already makes of the same
- * quaternion, so a pose and a map are held to one standard.
- */
 std::optional<double> yawOf(const geometry_msgs::msg::Quaternion& orientation)
 {
   if (!isFinite(orientation.x) || !isFinite(orientation.y) ||
@@ -105,10 +83,8 @@ std::optional<double> yawOf(const geometry_msgs::msg::Quaternion& orientation)
   return FSM::Utils::wrapAngle(yaw);
 }
 
-}  // namespace
+}
 
-/*******************************************************************************
-*/
 Interface::Interface(const rclcpp::NodeOptions& options)
 : rclcpp::Node("fsm_lidar_odometry", options)
 {
@@ -122,13 +98,6 @@ Interface::Interface(const rclcpp::NodeOptions& options)
     throw std::invalid_argument(problem);
   }
 
-  /*
-   * The core reports in plain strings and does not say how serious any of them
-   * is, so none is invented here. Nearly everything it has to say is stage
-   * timing that an ordinary build compiles out entirely; what reaches this in
-   * an ordinary build is rare and worth seeing, which is why it goes out at
-   * info rather than debug.
-   */
   setDiagnosticSink(
     [this](const std::string& message)
     {
@@ -196,8 +165,6 @@ Interface::Interface(const rclcpp::NodeOptions& options)
     get_name());
 }
 
-/*******************************************************************************
-*/
 void Interface::clearTrajectory(
   const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -214,8 +181,6 @@ void Interface::clearTrajectory(
   response->message = "estimated trajectory cleared";
 }
 
-/*******************************************************************************
-*/
 void Interface::declareParameters()
 {
   const std::string name = get_name();
@@ -245,25 +210,6 @@ void Interface::declareParameters()
   declare_parameter("scan_qos_depth", 1);
 }
 
-/*******************************************************************************
- * Construct the lo_frame_id <- base_frame_id odometry message and publish it
- *
- * Two consecutive scans can carry the same stamp, and it is not a fault when
- * they do: a replayed recording is free to repeat one, and a driver that
- * stamps on publication rather than on acquisition can emit two inside a
- * single clock tick. A recording that does it is more likely to be replayed
- * than fixed, so this is an ordinary path and not an impossible one.
- *
- * The displacement between such a pair is measured and is published as
- * measured, since it is the node's whole product and dropping the message to
- * protect a field derived from it would cost more than it saved. The velocity
- * is left at zero. A displacement over no elapsed time is not a large rate, it
- * is no rate at all, and dividing anyway yields an infinity that any consumer
- * folding it into a filter carries for the rest of the run with no way back. A
- * zero is a claim about one sample that the next scan corrects. The same holds
- * for a stamp that goes backwards, which is why the interval is required to be
- * positive rather than merely different from zero.
- */
 void Interface::publishOdometry(const MatchResult& result,
   const rclcpp::Time& stamp, double interval)
 {
@@ -295,9 +241,6 @@ void Interface::publishOdometry(const MatchResult& result,
   odometry_publisher_->publish(message);
 }
 
-/*******************************************************************************
- * The total path estimate with respect to the global frame
- */
 void Interface::publishPath(const MatchResult& result,
   const rclcpp::Time& stamp)
 {
@@ -313,9 +256,6 @@ void Interface::publishPath(const MatchResult& result,
   path_publisher_->publish(path_);
 }
 
-/*******************************************************************************
- * The current pose estimate with respect to the global frame
- */
 void Interface::publishPose(const MatchResult& result,
   const rclcpp::Time& stamp)
 {
@@ -327,9 +267,6 @@ void Interface::publishPose(const MatchResult& result,
   pose_publisher_->publish(message);
 }
 
-/*******************************************************************************
- * Construct the lo_frame_id <- base_frame_id transform and publish it
- */
 void Interface::publishTransform(const MatchResult& result,
   const rclcpp::Time& stamp)
 {
@@ -352,8 +289,6 @@ void Interface::publishTransform(const MatchResult& result,
   transform_broadcaster_->sendTransform(message);
 }
 
-/*******************************************************************************
-*/
 Parameters Interface::readParameters()
 {
   Parameters parameters;
@@ -377,8 +312,6 @@ Parameters Interface::readParameters()
   return parameters;
 }
 
-/*******************************************************************************
-*/
 geometry_msgs::msg::Pose Interface::retypePose(const Pose& pose) const
 {
   geometry_msgs::msg::Pose message;
@@ -398,8 +331,6 @@ geometry_msgs::msg::Pose Interface::retypePose(const Pose& pose) const
   return message;
 }
 
-/*******************************************************************************
-*/
 void Interface::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
 {
   if (locked_)
@@ -434,14 +365,6 @@ void Interface::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
   RCLCPP_INFO(get_logger(), "FSM executed in %.1f ms",
     1000.0 * result->execution_time);
 
-  /*
-   * Execution time rises faster than the ray count does, so a scan matched at
-   * a high resolution can take longer than the sensor takes to produce the
-   * next one. Every scan arriving while this one is still being matched is
-   * dropped, the odometry thins out, and nothing so far says why. Say why, and
-   * name the setting that fixes it. Throttled, because a node that cannot keep
-   * up would otherwise say so on every scan it does manage.
-   */
   if (result->execution_time > interval)
   {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
@@ -452,13 +375,6 @@ void Interface::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
       matcher_->matchSize());
   }
 
-  /*
-   * Recovery draws a pose at random, so a match that needed it is not
-   * reproducible across two builds even from the same seed: the standard
-   * library does not specify how a distribution turns random bits into a
-   * number. Any comparison of this node against another build is only as good
-   * as this line staying quiet.
-   */
   if (result->num_recoveries > 0)
   {
     RCLCPP_WARN(get_logger(),
@@ -472,21 +388,12 @@ void Interface::scanCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
   publishPath(*result, stamp);
 }
 
-/*******************************************************************************
- * If there is an initial pose then set it
- */
 void Interface::setInitialPose(
   const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
   geometry_msgs::msg::PoseWithCovarianceStamped message;
 
-  /*
-   * The listener is a throwaway node rather than this one. Waiting on a
-   * subscription belonging to a node an executor is already spinning puts that
-   * subscription into two wait sets at once, which throws and takes the whole
-   * process down.
-   */
   const auto listener = std::make_shared<rclcpp::Node>(
     std::string(get_name()) + "_initial_pose_listener");
 
@@ -501,12 +408,6 @@ void Interface::setInitialPose(
     return;
   }
 
-  /*
-   * A pose the node cannot use is refused outright rather than repaired.
-   * Whatever is put in place of it would be reported as the operator's own
-   * starting point and carried through every pose the node publishes, and
-   * there is no way to tell afterwards that it was invented here.
-   */
   if (!isFinite(message.pose.pose.position.x) ||
     !isFinite(message.pose.pose.position.y))
   {
@@ -542,8 +443,6 @@ void Interface::setInitialPose(
     pose.x, pose.y, pose.t);
 }
 
-/*******************************************************************************
-*/
 void Interface::start(
   const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -555,8 +454,6 @@ void Interface::start(
   response->message = "lidar odometry started";
 }
 
-/*******************************************************************************
-*/
 void Interface::stop(
   const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -568,4 +465,4 @@ void Interface::stop(
   response->message = "lidar odometry stopped";
 }
 
-}  // namespace fsm_lidar_odometry
+}

@@ -17,6 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
 #ifndef FSM_LIDAR_ODOMETRY__FSM_LIDAR_ODOMETRY_INTERFACE_HPP_
 #define FSM_LIDAR_ODOMETRY__FSM_LIDAR_ODOMETRY_INTERFACE_HPP_
 
@@ -38,10 +39,8 @@
 
 namespace fsm_lidar_odometry
 {
-
 /**
  * @brief Everything about this node that is a ROS concern.
- *
  * Owns the parameters, the topics, the services and the transform broadcast,
  * and delegates every computation to Matcher.
  */
@@ -109,6 +108,6 @@ private:
   bool locked_{true};
 };
 
-}  // namespace fsm_lidar_odometry
+}
 
-#endif  // FSM_LIDAR_ODOMETRY__FSM_LIDAR_ODOMETRY_INTERFACE_HPP_
+#endif

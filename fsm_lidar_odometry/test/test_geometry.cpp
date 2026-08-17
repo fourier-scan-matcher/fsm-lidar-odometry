@@ -18,23 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * Where a ray leaving a pose meets the walls of a room.
- *
- * Everything the matcher does rests on this: a scan is turned into points, the
- * points are turned back into ranges from a hypothesised pose, and the two are
- * compared. If the intersection is wrong then every stage above it is working
- * from fiction, and nothing further up would say so clearly.
- *
- * The expected answers here are worked out by hand rather than recorded from a
- * previous run, so they check the geometry rather than check that it has not
- * changed.
- *
- * Ray i of a scan of n rays leaves at i * 2*pi/n + pose orientation - pi. Ray
- * zero therefore points backwards along the pose's own axis, not forwards, and
- * the cases below are indexed with that in mind.
- */
-
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -47,18 +30,8 @@
 
 namespace
 {
-
-/* Intersections are exact for these rooms, so the bar is machine precision. */
 const double kExact = 1e-12;
 
-/*
- * Except when a ray meets a wall perpendicular to the x-axis at an angle. That
- * case is computed from a point placed a hundred million metres along the ray,
- * and the final subtraction cancels almost all of it away, costing about eight
- * digits. The answer is good to a few parts in a thousand million, no better.
- * The equivalence bar is the same order, which is close enough to be worth
- * knowing about.
- */
 const double kFarPointCancellation = 1e-8;
 
 using Point = std::pair<double, double>;
@@ -67,7 +40,6 @@ using Room = std::vector<Point>;
 const FSM::RaySearch kAngular = FSM::RaySearch::angular;
 const FSM::RaySearch kWindowed = FSM::RaySearch::windowed;
 
-/* Counter-clockwise, which is what the ray casting assumes. */
 Room rectangle(const double half_width, const double half_height)
 {
   return Room{
@@ -91,14 +63,8 @@ double distance(const Point& from, const Point& to)
   return std::sqrt(dx * dx + dy * dy);
 }
 
-}  // namespace
+}
 
-/*
- * The four rays of a four ray scan from the centre of a square leave along the
- * axes, so each meets the middle of one wall. This is also the case that
- * exercises the branch for a ray perpendicular to the x-axis, where the
- * gradient of the ray is infinite and the general formula cannot be used.
- */
 TEST(Geometry, AxisAlignedRaysFromTheCentreOfASquare)
 {
   const Room room = rectangle(4.0, 4.0);
@@ -111,11 +77,6 @@ TEST(Geometry, AxisAlignedRaysFromTheCentreOfASquare)
   expectPoint(hits[3], 0.0, 4.0, "ray at pi/2");
 }
 
-/*
- * A pose close to a wall sees that wall very near and the opposite wall very
- * far. Both distances are still exact, and the near one is where a sign error
- * or an off by one in the segment search would show up first.
- */
 TEST(Geometry, APoseCloseToAWall)
 {
   const Room room = rectangle(4.0, 4.0);
@@ -130,12 +91,6 @@ TEST(Geometry, APoseCloseToAWall)
   EXPECT_NEAR(distance({pose.x, pose.y}, hits[0]), 7.5, kExact);
 }
 
-/*
- * A ray aimed exactly at a corner meets two wall segments at the same point.
- * Either may be reported, and the point must be the corner in both cases: this
- * is the case where a search that stops at the first segment it likes and one
- * that keeps the nearest can disagree.
- */
 TEST(Geometry, ARayThroughACorner)
 {
   const Room room = rectangle(4.0, 4.0);
@@ -148,12 +103,6 @@ TEST(Geometry, ARayThroughACorner)
   expectPoint(hits[7], -4.0, 4.0, "ray at 3pi/4");
 }
 
-/*
- * A room that is not square and a ray that is not aligned with anything. The
- * expected point is where the line y = x*tan(pi/6) leaves a room eight wide and
- * five tall: it reaches x = 4 while y is still under 2.5, so it meets the right
- * hand wall rather than the top one.
- */
 TEST(Geometry, AnObliqueRayInARectangularRoom)
 {
   const Room room = rectangle(4.0, 2.5);
@@ -169,11 +118,6 @@ TEST(Geometry, AnObliqueRayInARectangularRoom)
     << "ray at pi/6, y";
 }
 
-/*
- * The pose's orientation turns the whole fan of rays with it. Turning the pose
- * by exactly one ray's worth must give the same set of points, shifted by one
- * place, since the rays then leave along the same directions as before.
- */
 TEST(Geometry, TurningThePoseByOneRayShiftsTheIntersections)
 {
   const Room room = rectangle(4.0, 2.5);
@@ -193,14 +137,6 @@ TEST(Geometry, TurningThePoseByOneRayShiftsTheIntersections)
       "ray " + std::to_string(i));
 }
 
-/*
- * Three implementations of the same thing live side by side. Two of them are
- * selectable at run time. The third walks every segment for every ray and is
- * slow, obvious, and used here as the answer the other two are held to.
- *
- * In a room whose walls turn only one way all three agree exactly, from
- * anywhere inside and at any orientation.
- */
 TEST(Geometry, BothRaySearchesAgreeWithTheExhaustiveOneInAConvexRoom)
 {
   const Room room = rectangle(4.0, 2.5);
@@ -222,11 +158,6 @@ TEST(Geometry, BothRaySearchesAgreeWithTheExhaustiveOneInAConvexRoom)
   }
 }
 
-/*
- * The room below is a rectangle with a wedge pushed down into it from the top
- * wall and a shallow point in the floor, so two of its corners turn back on
- * themselves.
- */
 Room wedgeRoom()
 {
   return Room{
@@ -234,10 +165,6 @@ Room wedgeRoom()
     {1.0, 1.0}, {-1.0, 2.5}, {-4.0, 2.5}};
 }
 
-/*
- * In a room with a corner that turns back on itself the angular search still
- * agrees with the exhaustive one.
- */
 TEST(Geometry, TheAngularRaySearchFindsTheNearestWallInAConcaveRoom)
 {
   const Room room = wedgeRoom();
@@ -255,19 +182,6 @@ TEST(Geometry, TheAngularRaySearchFindsTheNearestWallInAConcaveRoom)
   }
 }
 
-/*
- * The windowed search does not, and this pins the defect it is kept for.
- *
- * Across a reflex corner the segment a ray meets stops advancing with the ray,
- * the window stops following it, and the search settles for a wall standing
- * behind the nearest one. A range too long by metres is then handed to the
- * matcher as a measurement. From the pose below four of the ninety rays cross
- * the wedge and the worst of them lands nearly four metres out.
- *
- * This failing is asserted rather than merely recorded, because it is the only
- * thing that separates the two searches. Were it to go away, selecting the
- * windowed search would no longer select the behaviour it is offered for.
- */
 TEST(Geometry, TheWindowedRaySearchSettlesForAWallBehindTheNearestOne)
 {
   const Room room = wedgeRoom();
@@ -295,10 +209,6 @@ TEST(Geometry, TheWindowedRaySearchSettlesForAWallBehindTheNearestOne)
   EXPECT_NEAR(worst, 3.86, 0.01);
 }
 
-/*
- * And the choice really does choose. Whatever else changes, asking for one
- * search must not quietly hand back the other.
- */
 TEST(Geometry, TheTwoRaySearchesDisagreeWhereTheRoomTurnsBackOnItself)
 {
   const Room room = wedgeRoom();
@@ -311,20 +221,6 @@ TEST(Geometry, TheTwoRaySearchesDisagreeWhereTheRoomTurnsBackOnItself)
   EXPECT_NE(angular, windowed);
 }
 
-/*
- * Two rooms chosen by hand say little about a search that has to hold for
- * every shape a scan can trace out. This puts a thousand of them to it.
- *
- * The rooms are rings of sixty points at wildly varying distances from a
- * centre, which is the shape a scan of a cluttered room has and which is
- * dense in corners that turn back on themselves. The poses sit near the
- * centre, where they stay inside the ring whatever the radii come out as, and
- * face in every direction.
- *
- * The bar is exact equality, not nearness. Both searches put the same
- * arithmetic to the same walls in the same order, so the only thing that can
- * separate them is one of them missing a wall the other saw.
- */
 TEST(Geometry, TheRaySearchMatchesTheExhaustiveOneOverManyRandomRooms)
 {
   std::mt19937 generator(20260814);
@@ -368,11 +264,6 @@ TEST(Geometry, TheRaySearchMatchesTheExhaustiveOneOverManyRandomRooms)
   EXPECT_EQ(compared, 90000u);
 }
 
-/*
- * Ranges and points are two spellings of the same thing, so converting one way
- * and back must return what went in. This is the pair of conversions every
- * iteration of the matcher performs, twice.
- */
 TEST(Geometry, PointsAndRangesRoundTrip)
 {
   const Room room = rectangle(4.0, 2.5);

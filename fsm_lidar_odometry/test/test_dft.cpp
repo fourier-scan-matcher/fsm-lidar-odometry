@@ -18,22 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * The frequency transform, which is where the matching actually happens: both
- * stages compare two scans by transforming them and reading the answer out of
- * the coefficients.
- *
- * The reference to compare against is computed here, by summing the defining
- * formula term by term. That is a genuinely separate implementation, sharing
- * no code and no library with the one under test, which is what makes the
- * comparison worth anything. It is also slow enough that these cases use short
- * signals; correctness of a transform does not depend on its length.
- *
- * The transform is stored packed: entry k holds the real part of coefficient
- * k, and entry n-k holds its imaginary part. Coefficients zero and n/2 have no
- * imaginary part to store, a real signal being symmetric about them.
- */
-
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -45,23 +29,10 @@
 
 namespace
 {
-
-/*
- * A transform of sixteen points accumulates about sixteen roundings; the
- * term by term sum accumulates its own. Agreement to a part in a hundred
- * million million is all that can be asked, and is far tighter than anything
- * the matcher needs.
- */
 const double kTransform = 1e-11;
 
-/* The round trip is a transform and its exact inverse, so it should be near
- * perfect. */
 const double kRoundTrip = 1e-12;
 
-/*
- * Awkward amplitudes at three separate frequencies, with an offset, so that no
- * coefficient is zero by accident and a sign error anywhere shows up.
- */
 std::vector<double> signal(const std::size_t n)
 {
   std::vector<double> x(n);
@@ -74,7 +45,6 @@ std::vector<double> signal(const std::size_t n)
   return x;
 }
 
-/* The transform, summed term by term straight from its definition. */
 std::complex<double> coefficient(const std::vector<double>& x,
   const std::size_t k)
 {
@@ -87,12 +57,8 @@ std::complex<double> coefficient(const std::vector<double>& x,
   return sum;
 }
 
-}  // namespace
+}
 
-/*
- * Every coefficient of the packed transform matches the same coefficient
- * summed from the definition.
- */
 TEST(FrequencyTransform, TheForwardTransformMatchesTheDefinition)
 {
   const std::size_t n = 16;
@@ -116,11 +82,6 @@ TEST(FrequencyTransform, TheForwardTransformMatchesTheDefinition)
   }
 }
 
-/*
- * Unpacking the transform gives the whole spectrum, which for a real signal is
- * a mirror: coefficient n-k is the conjugate of coefficient k. If that
- * symmetry breaks the inverse transform stops producing a real signal.
- */
 TEST(FrequencyTransform, TheUnpackedSpectrumMirrorsItself)
 {
   const std::size_t n = 16;
@@ -148,12 +109,6 @@ TEST(FrequencyTransform, TheUnpackedSpectrumMirrorsItself)
   }
 }
 
-/*
- * Transforming and transforming back returns what went in. The inverse divides
- * by the length, which the forward transform does not multiply by, so a
- * missing or doubled scaling would show here as everything being out by a
- * factor of the scan size.
- */
 TEST(FrequencyTransform, ForwardAndInverseRoundTrip)
 {
   for (const std::size_t n : {8u, 16u, 64u, 360u})
@@ -168,11 +123,6 @@ TEST(FrequencyTransform, ForwardAndInverseRoundTrip)
   }
 }
 
-/*
- * The first coefficient is the one the translation stage reads its correction
- * from, and it is taken by a shortcut rather than from the full transform. The
- * shortcut must agree with the long way round.
- */
 TEST(FrequencyTransform, TheFirstCoefficientShortcutAgreesWithTheTransform)
 {
   const std::size_t n = 64;
@@ -186,12 +136,6 @@ TEST(FrequencyTransform, TheFirstCoefficientShortcutAgreesWithTheTransform)
   EXPECT_NEAR(first[1], expected.imag(), kTransform) << "imaginary part";
 }
 
-/*
- * A plan handed in by the caller and one taken from the cache describe the
- * same transform of the same length, so they must produce the same numbers.
- * The matcher holds its own two and the utilities take theirs from the cache;
- * if these disagreed the two paths through the code would disagree.
- */
 TEST(FrequencyTransform, ACallerSuppliedPlanMatchesTheCachedOne)
 {
   const std::size_t n = 64;
@@ -216,10 +160,6 @@ TEST(FrequencyTransform, ACallerSuppliedPlanMatchesTheCachedOne)
   EXPECT_DOUBLE_EQ(first_cached[1], first_supplied[1]);
 }
 
-/*
- * Transforming several scans at once is an optimisation, not a different
- * calculation, and must give what transforming them one at a time gives.
- */
 TEST(FrequencyTransform, TheBatchTransformMatchesOneAtATime)
 {
   const std::size_t n = 32;
@@ -245,10 +185,6 @@ TEST(FrequencyTransform, TheBatchTransformMatchesOneAtATime)
   }
 }
 
-/*
- * The shift swaps the two halves of a sequence, so applying it twice to an
- * even length sequence returns the original.
- */
 TEST(FrequencyTransform, ShiftingTwiceRestoresTheOriginal)
 {
   const std::vector<double> original{1.3, 2.7, 3.1, 4.9, 5.5, 6.2};

@@ -18,77 +18,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/*
- * The gate for the modernisation work.
- *
- * Drives the matcher over the same scans the ROS 1 reference build was driven
- * over, and compares against the numbers that build produced. The reference
- * files hold nothing but numbers, so this needs no ROS, no container and no
- * network: it can be run after every single change to the core.
- *
- * A modernisation pass that moves any of these numbers has changed behaviour,
- * whatever it claimed to do.
- *
- *
- * WHAT THE RUNTIME PATH REACHES, AND WHAT IT DOES NOT
- *
- * This file drives the wrapper, which is the only way the node reaches the
- * core, so every core function the runtime path can reach runs here at least
- * once. Several also have tests of their own elsewhere, against answers worked
- * out by hand rather than recorded.
- *
- * The core header declares seventy three functions. Forty five of them are
- * reachable. The twenty eight below are not: nothing on the path from a scan
- * arriving to a pose being published calls them, directly or at any depth.
- *
- * The list is arrived at rather than guessed. A single translation unit that
- * asks the core for exactly what the wrapper asks it for is compiled with
- * inlining off:
- *
- *   g++ -std=c++23 -O0 -fno-inline -ffunction-sections -c probe.cpp
- *   nm -C --defined-only probe.o | grep FSM::
- *
- * A function is emitted only where something calls it, so what the object file
- * holds is what the runtime path reaches, and the rest of the header is what
- * it does not. Re-run it after any change that adds or removes a call.
- *
- * Recording helpers. They write points, scans, maps and polygons to files for
- * offline inspection, and the node inspects nothing offline:
- *
- *   Dump::convexHulls, Dump::map, Dump::points, Dump::polygon,
- *   Dump::polygons, Dump::rangeScan, Dump::scan, DatasetUtils::printDataset
- *
- * Dataset reading. These belong to the offline driver the algorithm was
- * written around, which reads scans from a file rather than from a sensor:
- *
- *   DatasetUtils::dataset2points, DatasetUtils::dataset2rangesAndPose,
- *   DatasetUtils::readDataset, DatasetUtils::readDatasetScan
- *
- * Scan completion. Six variations on filling in a scan from a hypothesised
- * pose. The matcher completes scans by another route entirely and calls none
- * of them:
- *
- *   ScanCompletion::completeScan, ScanCompletion::completeScan1 through
- *   ScanCompletion::completeScan5
- *
- * Small helpers left behind, each called by nothing:
- *
- *   DFTUtils::fftshift, Rotation::angleById, Utils::generatePoseWithinMap,
- *   Utils::innerProduct, Utils::isPositionFartherThan,
- *   Utils::multiplyWithRotationMatrix, Utils::pairDiff, Utils::sgn,
- *   Utils::vectorDiff
- *
- * One is unreachable on purpose. X::findExact walks every wall for every ray
- * and is the slow, obvious answer the two selectable ray searches are held to
- * in test_geometry.cpp. It is reference material, not dead weight.
- *
- * Of the other twenty seven, only DFTUtils::fftshift has a test. The
- * remaining twenty six are shipped, compiled, and exercised by nothing at all.
- * Deleting them is a decision about how much of the original algorithm this
- * package is obliged to carry, which is why they are listed here rather than
- * removed.
- */
-
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -101,7 +30,6 @@
 
 namespace
 {
-
 const double kTolerance = 1e-9;
 
 struct Reference
@@ -220,7 +148,7 @@ void expectAgreement(const std::string& scenario)
   }
 }
 
-}  // namespace
+}
 
 TEST(CoreGolden, PureRotation)
 {
