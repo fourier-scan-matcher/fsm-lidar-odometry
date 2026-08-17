@@ -139,30 +139,29 @@ The alternative is to export the arithmetic settings as a usage requirement of
 the exported targets, which imposes them on a consumer that may have its own
 reasons for the settings it chose. Left to the readme to warn about instead.
 
-## The container's shell trim has not been through a build
+## The image build has two network fetches and neither retries
 
-Three faults were corrected in this container. The shell profile looked for the
-workspace under a path that resolved to `/home/`, so no shell in the shipped
-image had the workspace on it. The entrypoint took ownership of the two shared
-directories, which matters wherever a compose file bind mounts host directories
-over them. The build deleted the rosdep sources list and fetched an identical
-copy over a link with no retry.
+`rosdep update` and the lookup that finds the current ROS apt source release both
+reach the network, and each is a bare command in its own layer. Either failing
+fails the build, with a Python traceback rather than a sentence.
 
-All three are now in a built image and verified in it: a login shell lists this
-package's executable and `colcon_cd` is a function, the entrypoint carries no
-`chown` of the shared directories, and the image holds the sources list the base
-image ships, byte for byte the file the deleted step used to fetch.
+They are normally invisible because the layers cache. Clearing the build cache
+and rebuilding twice in an afternoon is enough to be rate limited by
+`raw.githubusercontent.com`, which answers 429, which rosdep reports as a read
+timeout. Nothing about the package is wrong when that happens, and nothing in the
+output says so. A retry with a short backoff around each would close it, and is
+left because the failure is loud rather than silent.
 
-What that build predates is the general half of the shell profile, cut from
-eleven hundred and fifty six lines of somebody's personal configuration to fifty
-six this package owns, and the entrypoint's comments about an X authority file
-and a workspace mount that no compose file declares, removed with it. Both were
-proved by mounting the new file into the built image over its own copy, and
-neither has been through an image build.
+There were three. `rm /etc/ros/rosdep/sources.list.d/20-default.list && rosdep
+init` is gone: the base image already ships that file, byte for byte what
+`rosdep init` writes, so the step deleted a correct file to fetch an identical
+one over the link that fails.
 
-Two network fetches remain in the build, `rosdep update` and the lookup that
-finds the current ROS apt source release. Both genuinely need the network and
-neither retries.
+The image has since been rebuilt with every container change this package
+carries, and everything they claimed holds in it: the sources list is present and
+identical, a shell opens on a fifty six line profile with the workspace on its
+path and `colcon_cd` a function, no compiler is exported, and the entrypoint
+carries no `chown` of the shared directories.
 
 ## The container cannot be told to run the node
 
