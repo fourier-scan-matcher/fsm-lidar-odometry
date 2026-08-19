@@ -63,13 +63,10 @@ Two ways, in increasing order of effort. The ROS 2 sources are on the `lyrical-d
 
 ### From Docker Hub
 
-The image carries ROS 2 Lyrical and every dependency, so the host needs nothing but Docker. It is a runtime image: it holds what the node needs to run and no visualisation or simulation tools, which keeps it a little over two gigabytes.
-
 ```bash
+# `latest` points at the same image
 docker pull li9i/fsm-lidar-odometry:lyrical
 ```
-
-`latest` points at the same image. The ROS 1 version stays where it always was, at `li9i/fsm-lo:latest`, and is not updated any more.
 
 To build the image yourself instead of pulling it:
 
@@ -91,21 +88,36 @@ rosdep install --from-paths src --ignore-src -r -y --skip-keys libfftw3
 colcon build --packages-select fsm_lidar_odometry
 ```
 
-FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets.
+> [!NOTE]
+> FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets.
 
 ### As a dependency of your own package
 
-The matcher is usable without the node. Name this package in your manifest and link the target you want: `fsm_lidar_odometry::fsm_lidar_odometry_core` for the matcher on its own, which pulls in no ROS, or `fsm_lidar_odometry::fsm_lidar_odometry_interface` for the node's own class.
+The matcher is usable without the node. Name this package in your manifest and link the target you want.
+
+For the matcher on its own, which pulls in no ROS:
+```
+fsm_lidar_odometry::fsm_lidar_odometry_core
+```
+
+Or, for the node's own class:
+
+```
+fsm_lidar_odometry::fsm_lidar_odometry_interface
+```
+
+--
 
 ```cmake
 find_package(fsm_lidar_odometry REQUIRED)
-
 target_link_libraries(your_target fsm_lidar_odometry::fsm_lidar_odometry_core)
 ```
 
 Each target carries this package's headers and its own dependencies, so Eigen, CGAL and FFTW3 do not have to be found again on your side.
 
+<!--
 One thing to know before trusting the numbers. Nearly all of the matcher is in the header, so what governs the arithmetic of what you call is the flags **you** compile with, not the ones this package was built with. The figures quoted here were measured at the settings its own `CMakeLists.txt` sets, and the tolerance you can hold it to at other settings has not been characterised.
+-->
 
 ## Run
 
@@ -126,7 +138,9 @@ docker compose -f docker/docker-compose.yml exec --user fsm_lidar_odometry \
   fsm_lidar_odometry bash -lc 'ros2 launch fsm_lidar_odometry fsm_lidar_odometry.launch.xml'
 ```
 
+<!--
 Both arguments matter. `--user fsm_lidar_odometry` is needed because the container's main process drops to that user but an `exec` does not, and only that user's shell has the workspace on its path. `bash -lc` is needed because the environment comes from that shell's profile rather than from the image.
+-->
 
 ### Call
 
@@ -157,7 +171,8 @@ The executable is `fsm_lidar_odometry_interface_node`. It runs on a multi-thread
 | `path_estimate_topic` | `nav_msgs/msg/Path`             | the total estimated trajectory relative to the global frame is published here |
 | `lo_topic`            | `nav_msgs/msg/Odometry`         | the odometry is published here                                                |
 
-Every message is stamped with the timestamp of the scan that produced it, not with the clock at the moment it was produced. Replaying a recording therefore gives the same output every time.
+> [!NOTE]
+> Every message is stamped with the timestamp of the scan that produced it, not with the clock at the moment it was produced. Replaying a recording therefore gives the same output every time.
 
 #### Services offered
 
@@ -188,8 +203,6 @@ Found in `config/params.yaml`:
 | `base_frame_id`   | the lidar sensor's reference frame id (e.g. `base_laser_link`) |
 | `lo_frame_id`     | the (lidar) odometry's frame id                                |
 
-Frame ids carry no leading slash. tf2 rejects them.
-
 | FSM-specific parameters  | Description                                                                                                       | Default value |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------- |:-------------:|
 | `size_scan`              | how many rays a scan is matched at; `0` matches every ray the scan carries, see below                             | 0             |
@@ -205,28 +218,17 @@ Frame ids carry no leading slash. tf2 rejects them.
 
 - `size_scan` decides how many rays a scan is matched at.
 
-- `0`, the default, matches every ray the scan carries: the sensor's own resolution, with nothing discarded. The first scan to arrive settles the size for the session, since two scans can only be matched against each other at one size, and a later scan of a different length is resampled to it rather than dropped.
+  - `0`, the default, matches every ray the scan carries: the sensor's own resolution, with nothing discarded. The first scan to arrive settles the size for the session, since two scans can only be matched against each other at one size, and a later scan of a different length is resampled to it rather than dropped.
 
-  Any other value reduces every scan to that many rays before matching, and refuses a scan that carries fewer. This is the setting to reach for when matching cannot keep up with the sensor. Execution time rises faster than the ray count does, so halving the rays buys back more than half the time.
+    Any other value reduces every scan to that many rays before matching, and refuses a scan that carries fewer. This is the setting to reach for when matching cannot keep up with the sensor. Execution time rises faster than the ray count does, so halving the rays buys back more than half the time.
 
-  On a 1.70 GHz laptop core, a match takes 21 ms at 360 rays, 48 ms at 720, and 76 ms at 1081. Anything bought in the last few years is two to four times faster than that. If a match ever takes longer than the gap between scans the node says so, periodically, and names this setting.
+    On a 1.70 GHz laptop core, a match takes 21 ms at 360 rays, 48 ms at 720, and 76 ms at 1081. Anything bought in the last few years is two to four times faster than that. If a match ever takes longer than the gap between scans the node says so, periodically, and names this setting.
 
 - `ray_search` picks between two ways of finding the wall each ray of a scan meets.
 
-  - `angular` offers each wall only to the rays that can reach it. It returns the
-nearest wall in front of every ray whatever shape the room is, and its
-execution time rises in step with `size_scan`.
+  - `angular` offers each wall only to the rays that can reach it. It returns the nearest wall in front of every ray whatever shape the room is, and its execution time rises in step with `size_scan`.
 
-  - `windowed` narrows the search for each ray to the neighbourhood of the wall the
-previous ray met. It is what this algorithm shipped with, and it is kept so
-that a run can be compared against results published before `angular` existed.
-Its execution time rises with the square of `size_scan`, and where a room turns
-back on itself it can return a wall standing behind the nearest one.
-
-  Measured over 13908 matches drawn from a recorded dataset at `size_scan: 360`,
-`angular` completes a match in 17.9 ms against `windowed`'s 25.4 ms, median.
-The two disagree on 0.67% of matches, by a median of 3.5 mm. At `size_scan:
-1440` the ray casting alone is 3.2 times faster, and at 5760, 12.4 times.
+  - `windowed` narrows the search for each ray to the neighbourhood of the wall the previous ray met. It is what this algorithm shipped with, and it is kept so that a run can be compared against results published before `angular` existed.  Its execution time rises with the square of `size_scan`, and where a room turns back on itself it can return a wall standing behind the nearest one.
 
 | Node parameters        | Description                                                                                                                | Default value |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- |:-------------:|
@@ -243,17 +245,18 @@ lo_frame_id <- base_frame_id
 
 in other words `fsm_lidar_odometry` publishes the transform from `base_laser_link` (or equivalent) to the equivalent of `/odom` (in this case `lo_frame_id`).
 
-#### Diagnostics
-
-The matching core reports in plain strings and does not write to a terminal itself. It hands each line to whatever destination the host installed, through `fsm_lidar_odometry::setDiagnosticSink`, and drops the line where nothing was installed. The node installs a destination that forwards to `RCLCPP_INFO`, so anything the core says arrives in the ordinary ROS log.
-
-In an ordinary build there is almost nothing to say. The stage timings, which are the bulk of it, are compiled out unless the core is built with `FSM_LIDAR_ODOMETRY_TRACE`:
-
-```sh
-colcon build --cmake-args "-DCMAKE_CXX_FLAGS=-DFSM_LIDAR_ODOMETRY_TRACE"
-```
-
-That build is for finding out where the time goes and is not the one to run a robot with: it reads the clock around every stage of every iteration.
+> [!NOTE]
+> #### Diagnostics
+>
+> The matching core reports in plain strings and does not write to a terminal itself. It hands each line to whatever destination the host installed, through `fsm_lidar_odometry::setDiagnosticSink`, and drops the line where nothing was installed. The node installs a destination that forwards to `RCLCPP_INFO`, so anything the core says arrives in the ordinary ROS log.
+>
+> In an ordinary build there is almost nothing to say. The stage timings, which are the bulk of it, are compiled out unless the core is built with `FSM_LIDAR_ODOMETRY_TRACE`:
+>
+> ```sh
+> colcon build --cmake-args "-DCMAKE_CXX_FLAGS=-DFSM_LIDAR_ODOMETRY_TRACE"
+> ```
+>
+> That build is for finding out where the time goes and is not the one to run a robot with: it reads the clock around every stage of every iteration.
 
 
 <details>
