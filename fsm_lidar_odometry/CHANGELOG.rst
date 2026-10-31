@@ -14,8 +14,10 @@ Forthcoming
   and returning nothing, so callers now get a success flag and a message.
 * Output is stamped from the incoming scan rather than from the clock at the
   moment of processing. The reported twist follows from the interval between
-  scan stamps, so it no longer varies with machine load, and replaying a
-  recording gives the same output every time.
+  scan stamps, so it no longer varies with machine load. A replay of a
+  recording gives the same stamps every time. A match that needs the recovery
+  search can still give a different pose on each replay, as ``rng_seed`` below
+  says.
 * The scan subscription's reliability and depth are exposed as the
   ``scan_qos_reliability`` and ``scan_qos_depth`` parameters. The defaults
   mirror ROS 1, so a ``best_effort`` sensor driver needs
@@ -28,8 +30,13 @@ Forthcoming
   search, now the default, and the ``windowed`` search the algorithm shipped
   with. Over 13908 matches at ``size_scan: 360``, ``angular`` completes a match
   in 17.9 ms against ``windowed``'s 25.4 ms, median.
-* Adds the ``rng_seed`` parameter. A non-zero value pins the recovery search so
-  a run can be reproduced.
+* Adds the ``rng_seed`` parameter. ``0`` draws the recovery search from
+  hardware entropy. Any other value seeds the generator of each executor thread
+  once, at the first draw on that thread. Any executor thread may run a match,
+  so which draw a recovery gets depends on the thread schedule. Two runs over
+  the same input can still differ where a recovery was needed: on a recording
+  from a real robot, two runs at ``rng_seed`` 1 over 2000 scans differed from
+  step 230.
 * Parameters outside their permitted range are refused at start-up with an
   explanation instead of tripping an assertion that release builds compile
   away.

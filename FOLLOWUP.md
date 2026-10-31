@@ -86,10 +86,7 @@ no behavioural gain. Every other check `ament_lint_common` provides is on.
 
 ## The recovery path is untested across versions
 
-The matcher falls back on a randomly seeded search when a match goes badly.
-`rng_seed` pins it so a run can be reproduced within one build, and there is a
-unit test for that, but the cross version comparison deliberately never
-exercises it: the synthetic motion is small enough that recovery never fires.
+The matcher falls back on a randomly seeded search when a match goes badly. A non-zero `rng_seed` seeds the generator of each executor thread once, and a unit test shows that one thread seeded alike draws alike. That does not make a run repeat. Any executor thread may run a match, so which draw a recovery gets depends on the thread schedule. On a recording from a real robot, two runs at `rng_seed` 1 over 2000 scans differed from step 230. The cross version comparison deliberately never exercises the recovery path: the synthetic motion is small enough that recovery never fires.
 
 The reason is that the standard library does not specify how a distribution
 turns random bits into a number, so two implementations may differ even from
@@ -116,10 +113,7 @@ side, since it could not have agreed to that precision if it had.
 
 ## The recovery seed exists on the port branch only
 
-`rng_seed` was meant to be threaded through on the correction branch as well,
-so that both sides of the comparison could pin the recovery search. It reached
-only the port branch. The correction branch still seeds from hardware entropy
-with no way to pin it.
+`rng_seed` was meant to be threaded through on the correction branch as well, so that both sides of the comparison could seed the recovery search. It reached only the port branch. The correction branch still seeds from hardware entropy, with no setting to change that. On the port branch a seed does not make a run repeat either, as the entry on the recovery path says.
 
 This changes nothing about the reference recordings, which were captured from a
 build where recovery never fired, so the seed would have had nothing to

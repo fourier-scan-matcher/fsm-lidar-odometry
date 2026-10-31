@@ -61,7 +61,10 @@
     max_recoveries: 10
 
     # 0 draws the recovery search from hardware entropy, as this algorithm has
-    # always done. Any other value pins it so that a run can be reproduced.
+    # always done. Any other value seeds the generator of each executor thread
+    # once, at the first draw on that thread. Any executor thread may run a
+    # match, so which draw a recovery gets depends on the thread schedule. Two
+    # runs over the same input can still differ where a recovery was needed.
     rng_seed: 0
 
     # How each ray of a scan is matched to the wall it meets.

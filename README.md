@@ -172,7 +172,7 @@ The executable is `fsm_lidar_odometry_interface_node`. It runs on a multi-thread
 | `lo_topic`            | `nav_msgs/msg/Odometry`         | the odometry is published here                                                |
 
 > [!NOTE]
-> Every message is stamped with the timestamp of the scan that produced it, not with the clock at the moment it was produced. Replaying a recording therefore gives the same output every time.
+> Every message is stamped with the timestamp of the scan that produced it, not with the clock at the moment it was produced. A replay of a recording therefore gives the same stamps every time. A match that needs the recovery search can still give a different pose on each replay, see `rng_seed` below.
 
 #### Services offered
 
@@ -213,7 +213,7 @@ Found in `config/params.yaml`:
 | `t_bound`                | Angular-wise radius for randomly generating a new initial orientation estimate in case of recovery                | π/4           |
 | `max_counter`            | Lower values decrease execution time                                                                              | 200           |
 | `max_recoveries`         | Lower values decrease execution time                                                                              | 10            |
-| `rng_seed`               | 0 draws the recovery search from hardware entropy, as always. Any other value pins it so a run can be reproduced  | 0             |
+| `rng_seed`               | 0 draws the recovery search from hardware entropy, as always. Any other value seeds its generators, see below     | 0             |
 | `ray_search`             | `angular` or `windowed`. How each ray is matched to the wall it meets; see below                                   | `angular`     |
 
 - `size_scan` decides how many rays a scan is matched at.
@@ -223,6 +223,12 @@ Found in `config/params.yaml`:
     Any other value reduces every scan to that many rays before matching, and refuses a scan that carries fewer. This is the setting to reach for when matching cannot keep up with the sensor. Execution time rises faster than the ray count does, so halving the rays buys back more than half the time.
 
     On a 1.70 GHz laptop core, a match takes 21 ms at 360 rays, 48 ms at 720, and 76 ms at 1081. Anything bought in the last few years is two to four times faster than that. If a match ever takes longer than the gap between scans the node says so, periodically, and names this setting.
+
+- `rng_seed` decides how the recovery search draws the poses it restarts a match from.
+
+  - `0`, the default, draws them from hardware entropy, as this algorithm has always done.
+
+    Any other value seeds the generator of each executor thread with that value, once, at the first draw on that thread. The node runs several executor threads, and any of them may run a match. Thus which draw a recovery gets depends on the thread schedule. Two runs over the same input can still differ at a step that needed a recovery. On a recording from a real robot, two runs at `rng_seed` 1 over the same 2000 scans differed from step 230. A match that needs no recovery draws nothing, so the seed does not change it.
 
 - `ray_search` picks between two ways of finding the wall each ray of a scan meets.
 
