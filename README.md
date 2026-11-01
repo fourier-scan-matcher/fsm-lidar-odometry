@@ -17,6 +17,9 @@
     <a href="#run">run</a>
 </h3>
 
+> [!IMPORTANT]
+> The [odometry mode](https://github.com/fourier-scan-matcher/fsm-localisation#odometry-mode) of [`fsm_localisation`](https://github.com/fourier-scan-matcher/fsm-localisation) replaces this package. That mode is this package with a new name, and it gives the same odometry. To move to it, read [Coming from fsm_lidar_odometry](https://github.com/fourier-scan-matcher/fsm-localisation#coming-from-fsm_lidar_odometry).
+
 `fsm_lidar_odometry` is a ROS 2 package written in C++ that provides LIDAR odometry from measurements of a single panoramic 2D LIDAR sensor, that is: a sensor whose field of view is 360 degrees. `fsm_lidar_odometry` is the ROS wrapper of [`fsm`](https://github.com/li9i/fsm).
 
 <p align="center">
