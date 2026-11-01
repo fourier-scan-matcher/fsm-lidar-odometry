@@ -4,6 +4,12 @@ Changelog for package fsm_lidar_odometry
 
 Forthcoming
 -----------
+* Declares ``libfftw3-dev`` as a build dependency and ``libfftw3`` as a run
+  dependency. ``ros/rosdistro`` #54634 split the ``libfftw3`` rule: that key
+  now installs the run time libraries only, and the new key ``libfftw3-dev``
+  installs the headers. Thus ``rosdep`` installs each dependency, and the
+  install steps and ``docker/Dockerfile`` no longer install ``libfftw3-dev``
+  by name or skip a key.
 * Unpacks the spectrum of an odd count of rays correctly. It unpacked each
   spectrum as if its length was even. Thus at an odd length it removed the
   imaginary part of the highest coefficient and gave one coefficient too few.

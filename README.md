@@ -83,13 +83,9 @@ mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
 git clone https://github.com/fourier-scan-matcher/fsm-lidar-odometry.git
 cd ~/ros2_ws
-sudo apt install libfftw3-dev
-rosdep install --from-paths src --ignore-src -r -y --skip-keys libfftw3
+rosdep install --from-paths src --ignore-src -r -y
 colcon build --packages-select fsm_lidar_odometry
 ```
-
-> [!NOTE]
-> FFTW3 is installed by hand there because `rosdep`'s rule for it names `libfftw3-3`, which Ubuntu has replaced with per-precision packages and which no longer exists on the release Lyrical targets.
 
 ### As a dependency of your own package
 

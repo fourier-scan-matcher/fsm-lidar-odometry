@@ -35,9 +35,7 @@ RUN rosdep update
 COPY --chown=${USER}:${USER} fsm_lidar_odometry/ /home/${USER}/ros2_ws/src/fsm_lidar_odometry/
 
 RUN apt-get -y update                                                       && \
-    apt-get install -y --no-install-recommends libfftw3-dev                 && \
-    rosdep install --from-paths /home/${USER}/ros2_ws/src --ignore-src -r -y   \
-      --skip-keys libfftw3                                                  && \
+    rosdep install --from-paths /home/${USER}/ros2_ws/src --ignore-src -r -y && \
     rm -rf /var/lib/apt/lists/*
 
 USER ${USER}
