@@ -4,6 +4,13 @@ Changelog for package fsm_lidar_odometry
 
 Forthcoming
 -----------
+* Unpacks the spectrum of an odd count of rays correctly. It unpacked each
+  spectrum as if its length was even. Thus at an odd length it removed the
+  imaginary part of the highest coefficient and gave one coefficient too few.
+  This changed each rotation that the matcher found for a scan of an odd count
+  of rays. The 1073 rays of the rb1 recording are such a count at the shipped
+  ``size_scan`` of 0. The same defect was in ``fsm_localisation``. At an odd
+  length the arithmetic no longer agrees with the ROS 1 package.
 * Ports the package from ROS 1 Kinetic to ROS 2. The ROS 1 version was only
   ever available from source, so there is no earlier changelog to continue.
 * The package is renamed from ``fsm_lo`` to ``fsm_lidar_odometry``. The node,

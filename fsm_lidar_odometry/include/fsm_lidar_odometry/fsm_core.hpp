@@ -2209,7 +2209,7 @@ class DFTUtils
     std::vector< std::pair<double, double> > fft_coeff_pairs;
     for (std::size_t i = 0; i <= coeffs.size()/2; i++)
     {
-      if (i == 0 || i == coeffs.size()/2)
+      if (i == 0 || 2 * i == coeffs.size())
         fft_coeff_pairs.push_back(std::make_pair(coeffs[i], 0.0));
       else
       {
@@ -2220,7 +2220,7 @@ class DFTUtils
 
     const std::vector< std::pair<double, double> > fft_coeff_pairs_bak =
       fft_coeff_pairs;
-    for (int i = fft_coeff_pairs_bak.size()-2; i > 0; i--)
+    for (int i = (static_cast<int>(coeffs.size()) - 1) / 2; i > 0; i--)
     {
       fft_coeff_pairs.push_back(
         std::make_pair(fft_coeff_pairs_bak[i].first, -fft_coeff_pairs_bak[i].second));

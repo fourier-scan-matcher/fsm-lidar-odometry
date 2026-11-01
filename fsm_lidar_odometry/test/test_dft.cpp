@@ -51,10 +51,22 @@ std::complex<double> coefficient(const std::vector<double>& x,
   std::complex<double> sum{0.0, 0.0};
   for (std::size_t j = 0; j < x.size(); j++)
   {
-    const double a = 2.0 * M_PI * static_cast<double>(j * k) / x.size();
+    const double a =
+      2.0 * M_PI * static_cast<double>((j * k) % x.size()) / x.size();
     sum += std::complex<double>(x[j] * std::cos(a), -x[j] * std::sin(a));
   }
   return sum;
+}
+
+std::vector<double> signalWithTopHarmonic(const std::size_t n)
+{
+  std::vector<double> x = signal(n);
+  for (std::size_t i = 0; i < n; i++)
+  {
+    const double a = 2.0 * M_PI * static_cast<double>(i) / n;
+    x[i] += 0.229 * std::sin(static_cast<double>(n / 2) * a + 0.4);
+  }
+  return x;
 }
 
 }
@@ -109,11 +121,46 @@ TEST(FrequencyTransform, TheUnpackedSpectrumMirrorsItself)
   }
 }
 
+/**
+ * @brief The unpacked spectrum is the one the definition gives, coefficient by
+ * coefficient, up to the highest.
+ * @details At an odd length the highest coefficient has an imaginary part and
+ * there is no coefficient at half the length, so the spectrum cannot be
+ * unpacked as at an even one. The signal carries the highest coefficient so
+ * that it is not nought: at 16 it is the real one at half the length. The odd
+ * lengths are those of a scan reduced to 269 rays and of the rb1 recording's
+ * 1073. Measured, the spectrum misses the definition by at most 3.6e-15,
+ * 2.7e-15, 2.3e-13 and 2.5e-12 at lengths 15, 16, 269 and 1073. Unpacked as
+ * at an even length it came out a coefficient short at every odd length, and
+ * it would drop an imaginary part of 0.229 * n * cos(0.4) / 2, 1.58 at 15,
+ * derived. The bound is between the two.
+ */
+TEST(FrequencyTransform, TheUnpackedSpectrumMatchesTheDefinitionToItsTop)
+{
+  for (const std::size_t n : {15u, 16u, 269u, 1073u})
+  {
+    const std::vector<double> x = signalWithTopHarmonic(n);
+    const std::vector<std::pair<double, double>> spectrum =
+      FSM::DFTUtils::getDFTCoefficientsPairs(FSM::DFTUtils::dft(x));
+
+    ASSERT_EQ(spectrum.size(), n) << "length " << n;
+
+    for (std::size_t k = 0; k < n; k++)
+    {
+      const std::complex<double> expected = coefficient(x, k);
+      EXPECT_NEAR(spectrum[k].first, expected.real(), kTransform)
+        << "length " << n << ", real part of coefficient " << k;
+      EXPECT_NEAR(spectrum[k].second, expected.imag(), kTransform)
+        << "length " << n << ", imaginary part of coefficient " << k;
+    }
+  }
+}
+
 TEST(FrequencyTransform, ForwardAndInverseRoundTrip)
 {
-  for (const std::size_t n : {8u, 16u, 64u, 360u})
+  for (const std::size_t n : {8u, 15u, 16u, 64u, 269u, 360u, 1073u})
   {
-    const std::vector<double> x = signal(n);
+    const std::vector<double> x = signalWithTopHarmonic(n);
     const std::vector<double> back = FSM::DFTUtils::idft(
       FSM::DFTUtils::getDFTCoefficientsPairs(FSM::DFTUtils::dft(x)));
 
